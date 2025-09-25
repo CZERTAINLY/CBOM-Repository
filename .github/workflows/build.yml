@@ -1,0 +1,63 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+# Cancel in-progress runs of the same workflow on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Change this to your binary name
+  APP_NAME: cbom-repository
+  # Common build flags
+  GOFLAGS: -trimpath
+  LDFLAGS: -s -w -X "main.version=${{ github.sha }}"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux   # x86_64
+            goarch: amd64
+            ext: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: 'true'
+
+      - name: Print Go env
+        run: |
+          go env
+          go version
+          go tool dist list | grep -E '^(linux|darwin|windows)/(amd64|arm64)$' || true
+
+      - name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          NAME="${APP_NAME}-${GOOS}-${GOARCH}"
+          BIN="dist/${NAME}${{ matrix.ext }}"
+          echo "Building -> ${BIN}"
+          go build $GOFLAGS -ldflags "$LDFLAGS" -o "$BIN" ./cmd/cbom-repository
+          # Ensure executable bit on unix-like targets (Windows ignores it)
+          chmod +x "$BIN" || true
+          ls -lh "$BIN"
