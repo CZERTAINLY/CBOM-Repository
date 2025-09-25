@@ -28,7 +28,7 @@ func TestNewFunc(t *testing.T) {
 				MinioBucket:   "czertainly",
 			},
 		},
-		"no-whitespaces-only-endpoint": {
+		"whitespaces-only-endpoint": {
 			envVars: map[string]string{
 				"APP_MINIO_ENDPOINT":    "  \t  \r   ",
 				"APP_MINIO_BUCKET":      "czertainly",
@@ -38,7 +38,7 @@ func TestNewFunc(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		"no-whitespaces-only-bucket": {
+		"whitespaces-only-bucket": {
 			envVars: map[string]string{
 				"APP_MINIO_ENDPOINT":    "abcd",
 				"APP_MINIO_BUCKET":      "\t  \r\n  ",
@@ -48,7 +48,7 @@ func TestNewFunc(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		"no-whitespaces-only-aws-region": {
+		"whitespaces-only-aws-region": {
 			envVars: map[string]string{
 				"APP_MINIO_ENDPOINT":    "http://localhost:9000",
 				"APP_MINIO_BUCKET":      "czertainly",
@@ -56,9 +56,9 @@ func TestNewFunc(t *testing.T) {
 				"AWS_ACCESS_KEY_ID":     "minioadmin",
 				"AWS_SECRET_ACCESS_KEY": "adminpassword",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
-		"no-whitespaces-only-aws-access-key": {
+		"whitespaces-only-aws-access-key": {
 			envVars: map[string]string{
 				"APP_MINIO_ENDPOINT":    "http://localhost:9000",
 				"APP_MINIO_BUCKET":      "czertainly",
@@ -66,9 +66,9 @@ func TestNewFunc(t *testing.T) {
 				"AWS_ACCESS_KEY_ID":     "\t\t\r ",
 				"AWS_SECRET_ACCESS_KEY": "adminpassword",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
-		"no-whitespaces-only-aws-secret": {
+		"whitespaces-only-aws-secret": {
 			envVars: map[string]string{
 				"APP_MINIO_ENDPOINT":    "http://localhost:9000",
 				"APP_MINIO_BUCKET":      "czertainly",
@@ -76,7 +76,7 @@ func TestNewFunc(t *testing.T) {
 				"AWS_ACCESS_KEY_ID":     "minioadmin",
 				"AWS_SECRET_ACCESS_KEY": "    ",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		"endpoint-missing": {
 			envVars: map[string]string{
@@ -103,7 +103,7 @@ func TestNewFunc(t *testing.T) {
 				"AWS_ACCESS_KEY_ID":     "minioadmin",
 				"AWS_SECRET_ACCESS_KEY": "adminpassword",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		"aws-access-key-missing": {
 			envVars: map[string]string{
@@ -112,7 +112,7 @@ func TestNewFunc(t *testing.T) {
 				"AWS_REGION":            "eu-west-1",
 				"AWS_SECRET_ACCESS_KEY": "adminpassword",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		"aws-secret-missing": {
 			envVars: map[string]string{
@@ -121,7 +121,11 @@ func TestNewFunc(t *testing.T) {
 				"AWS_REGION":         "eu-west-1",
 				"AWS_ACCESS_KEY_ID":  "minioadmin",
 			},
-			wantErr: false,
+			wantErr: true,
+		},
+		"empty environment": {
+			envVars: map[string]string{},
+			wantErr: true,
 		},
 	}
 
@@ -133,6 +137,7 @@ func TestNewFunc(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 			} else {
+				require.NoError(t, err)
 				require.Equal(t, tc.want, cfg)
 			}
 		})
