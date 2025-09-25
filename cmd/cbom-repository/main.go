@@ -29,7 +29,7 @@ func main() {
 		panic(err)
 	}
 
-	s3cfg.BaseEndpoint = aws.String(cfg.MinioEndpoint)
+	s3cfg.BaseEndpoint = aws.String(cfg.StorageEndpoint)
 	var optFns []func(o *s3.Options)
 	optFns = append(optFns, func(o *s3.Options) {
 		o.UsePathStyle = true
@@ -37,7 +37,7 @@ func main() {
 
 	s3client := s3.NewFromConfig(s3cfg, optFns...)
 
-	store := store.New(s3client, cfg.MinioBucket)
+	store := store.New(s3client, cfg.StorageBucket)
 	svc := service.New(store)
 
 	// start http server

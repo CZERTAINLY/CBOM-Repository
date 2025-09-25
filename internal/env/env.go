@@ -13,8 +13,8 @@ const defaultPrefix = "APP"
 
 type Config struct {
 	// MinIO storage related
-	MinioEndpoint string `envconfig:"APP_MINIO_ENDPOINT" required:"true"`
-	MinioBucket   string `envconfig:"APP_MINIO_BUCKET" required:"true"`
+	StorageEndpoint string `envconfig:"APP_STORAGE_ENDPOINT" required:"true"`
+	StorageBucket   string `envconfig:"APP_STORAGE_BUCKET" required:"true"`
 }
 
 func New() (Config, error) {
@@ -24,11 +24,11 @@ func New() (Config, error) {
 		return Config{}, err
 	}
 
-	if strings.TrimSpace(config.MinioEndpoint) == "" {
+	if strings.TrimSpace(config.StorageEndpoint) == "" {
 		return Config{}, errors.New("environment variable `APP_MINIO_ENDPOINT` must not contain only whitespace characters")
 	}
 
-	if strings.TrimSpace(config.MinioBucket) == "" {
+	if strings.TrimSpace(config.StorageBucket) == "" {
 		return Config{}, errors.New("environment variable `APP_MINIO_BUCKET` must not contain only whitespace characters")
 	}
 
