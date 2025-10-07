@@ -6,13 +6,9 @@ import (
 	"net/http"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
-	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/oas"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 func main() {
@@ -23,34 +19,25 @@ func main() {
 		panic(err)
 	}
 
-	// create s3 client
-	s3cfg, err := config.LoadDefaultConfig(context.Background())
+	s3Client, s3Uploader, err := store.ConnectS3(context.Background(), cfg.Store)
 	if err != nil {
 		panic(err)
 	}
 
-	s3cfg.BaseEndpoint = aws.String(cfg.StorageEndpoint)
-	var optFns []func(o *s3.Options)
-	optFns = append(optFns, func(o *s3.Options) {
-		o.UsePathStyle = true
-	})
+	store := store.New(cfg.Store, s3Client, s3Uploader)
+	svc, err := service.New(store)
+	if err != nil {
+		panic(err)
+	}
 
-	s3client := s3.NewFromConfig(s3cfg, optFns...)
-
-	store := store.New(s3client, cfg.StorageBucket)
-	svc := service.New(store)
-
-	// start http server
-	httpHandler := internalHttp.New(svc)
-
-	httpServer := &http.Server{
-		Addr:    ":8080",
-		Handler: internalHttp.Router(httpHandler),
+	srv, err := oas.NewServer(svc)
+	if err != nil {
+		panic(err)
 	}
 
 	fmt.Println("Starting http server.")
 
-	if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.HttpPort), srv); err != http.ErrServerClosed {
 		panic(err)
 	}
 }

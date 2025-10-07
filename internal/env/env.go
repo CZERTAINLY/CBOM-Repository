@@ -2,9 +2,9 @@ package env
 
 import (
 	"errors"
-	"fmt"
-	"os"
 	"strings"
+
+	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/kelseyhightower/envconfig"
 )
@@ -12,9 +12,8 @@ import (
 const defaultPrefix = "APP"
 
 type Config struct {
-	// MinIO storage related
-	StorageEndpoint string `envconfig:"APP_STORAGE_ENDPOINT" required:"true"`
-	StorageBucket   string `envconfig:"APP_STORAGE_BUCKET" required:"true"`
+	Store    store.Config
+	HttpPort int `envconfig:"APP_HTTP_PORT" default:"8080"`
 }
 
 func New() (Config, error) {
@@ -24,20 +23,20 @@ func New() (Config, error) {
 		return Config{}, err
 	}
 
-	if strings.TrimSpace(config.StorageEndpoint) == "" {
-		return Config{}, errors.New("environment variable `APP_MINIO_ENDPOINT` must not contain only whitespace characters")
+	if strings.TrimSpace(config.Store.Region) == "" {
+		return Config{}, errors.New("environment variable `APP_S3_REGION` must not contain whitespace characters only")
 	}
 
-	if strings.TrimSpace(config.StorageBucket) == "" {
-		return Config{}, errors.New("environment variable `APP_MINIO_BUCKET` must not contain only whitespace characters")
+	if strings.TrimSpace(config.Store.Bucket) == "" {
+		return Config{}, errors.New("environment variable `APP_S3_BUCKET` must not contain whitespace characters only")
 	}
 
-	// although we don't hold the following AWS env variables directly, they are required by the `aws-sdk-go-v2`
-	// library for connection to the MinIO storage
-	for _, ev := range []string{"AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"} {
-		if strings.TrimSpace(os.Getenv(ev)) == "" {
-			return Config{}, fmt.Errorf("environment variable `%q` not defined", ev)
-		}
+	if strings.TrimSpace(config.Store.AccessKey) == "" {
+		return Config{}, errors.New("environment variable `APP_S3_ACCESS_KEY` must not contain whitespace characters only")
+	}
+
+	if strings.TrimSpace(config.Store.SecretKey) == "" {
+		return Config{}, errors.New("environment variable `APP_S3_SECRET_KEY` must not contain whitespace characters only")
 	}
 
 	return config, nil

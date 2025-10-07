@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -41,6 +42,86 @@ func (m *MockS3Contract) EXPECT() *MockS3ContractMockRecorder {
 	return m.recorder
 }
 
+// GetObject mocks base method.
+func (m *MockS3Contract) GetObject(arg0 context.Context, arg1 *s3.GetObjectInput, arg2 ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetObject", varargs...)
+	ret0, _ := ret[0].(*s3.GetObjectOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetObject indicates an expected call of GetObject.
+func (mr *MockS3ContractMockRecorder) GetObject(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetObject", reflect.TypeOf((*MockS3Contract)(nil).GetObject), varargs...)
+}
+
+// HeadBucket mocks base method.
+func (m *MockS3Contract) HeadBucket(arg0 context.Context, arg1 *s3.HeadBucketInput, arg2 ...func(*s3.Options)) (*s3.HeadBucketOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "HeadBucket", varargs...)
+	ret0, _ := ret[0].(*s3.HeadBucketOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HeadBucket indicates an expected call of HeadBucket.
+func (mr *MockS3ContractMockRecorder) HeadBucket(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadBucket", reflect.TypeOf((*MockS3Contract)(nil).HeadBucket), varargs...)
+}
+
+// HeadObject mocks base method.
+func (m *MockS3Contract) HeadObject(arg0 context.Context, arg1 *s3.HeadObjectInput, arg2 ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "HeadObject", varargs...)
+	ret0, _ := ret[0].(*s3.HeadObjectOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HeadObject indicates an expected call of HeadObject.
+func (mr *MockS3ContractMockRecorder) HeadObject(arg0, arg1 any, arg2 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeadObject", reflect.TypeOf((*MockS3Contract)(nil).HeadObject), varargs...)
+}
+
+// ListObjectsV2 mocks base method.
+func (m *MockS3Contract) ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, params}
+	for _, a := range optFns {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ListObjectsV2", varargs...)
+	ret0, _ := ret[0].(*s3.ListObjectsV2Output)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListObjectsV2 indicates an expected call of ListObjectsV2.
+func (mr *MockS3ContractMockRecorder) ListObjectsV2(ctx, params any, optFns ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, params}, optFns...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListObjectsV2", reflect.TypeOf((*MockS3Contract)(nil).ListObjectsV2), varargs...)
+}
+
 // PutObject mocks base method.
 func (m *MockS3Contract) PutObject(arg0 context.Context, arg1 *s3.PutObjectInput, arg2 ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	m.ctrl.T.Helper()
@@ -59,4 +140,48 @@ func (mr *MockS3ContractMockRecorder) PutObject(arg0, arg1 any, arg2 ...any) *go
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutObject", reflect.TypeOf((*MockS3Contract)(nil).PutObject), varargs...)
+}
+
+// MockS3Manager is a mock of S3Manager interface.
+type MockS3Manager struct {
+	ctrl     *gomock.Controller
+	recorder *MockS3ManagerMockRecorder
+	isgomock struct{}
+}
+
+// MockS3ManagerMockRecorder is the mock recorder for MockS3Manager.
+type MockS3ManagerMockRecorder struct {
+	mock *MockS3Manager
+}
+
+// NewMockS3Manager creates a new mock instance.
+func NewMockS3Manager(ctrl *gomock.Controller) *MockS3Manager {
+	mock := &MockS3Manager{ctrl: ctrl}
+	mock.recorder = &MockS3ManagerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockS3Manager) EXPECT() *MockS3ManagerMockRecorder {
+	return m.recorder
+}
+
+// Upload mocks base method.
+func (m *MockS3Manager) Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, input}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Upload", varargs...)
+	ret0, _ := ret[0].(*manager.UploadOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Upload indicates an expected call of Upload.
+func (mr *MockS3ManagerMockRecorder) Upload(ctx, input any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, input}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockS3Manager)(nil).Upload), varargs...)
 }

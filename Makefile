@@ -5,11 +5,16 @@ build:
 
 .PHONY: unit_test
 unit_test:
-	go test -parallel 6 -race -count=1 -v ./...
+	go test -parallel 6 -race -count=1 -coverprofile=ut_coverage.out -v ./...
+
+.PHONY: generate
+generate:
+	go generate ./...
+	go tool ogen --clean --package oas --target internal/oas api/openapi.yaml
 
 .PHONY: mockgen
 mockgen:
-	go run go.uber.org/mock/mockgen@latest -source=internal/store/store.go -destination internal/store/mock/mock.go -package=mock
+	go tool mockgen -source=internal/store/store.go -destination internal/store/mock/mock.go -package=mock
 
 .PHONY: docker-compose-up 
 docker-compose-up:

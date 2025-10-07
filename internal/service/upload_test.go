@@ -3,8 +3,64 @@ package service
 import (
 	"testing"
 
+	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/stretchr/testify/require"
 )
+
+func TestUploadInputChecks(t *testing.T) {
+	testCases := map[string]struct {
+		input   cdx.BOM
+		wantErr bool
+	}{
+		"empty struct": {
+			input:   cdx.BOM{},
+			wantErr: true,
+		},
+		"success": {
+			input: cdx.BOM{
+				SpecVersion:  cdx.SpecVersion1_6,
+				BOMFormat:    cdx.BOMFormat,
+				SerialNumber: "urn:uuid:550e8400-e29b-11d4-a716-446655440000",
+			},
+			wantErr: false,
+		},
+		"bad serial": {
+			input: cdx.BOM{
+				SpecVersion:  cdx.SpecVersion1_6,
+				BOMFormat:    cdx.BOMFormat,
+				SerialNumber: "urn:isbn:0451450523",
+			},
+			wantErr: true,
+		},
+		"lower spec version": {
+			input: cdx.BOM{
+				SpecVersion:  cdx.SpecVersion1_4,
+				BOMFormat:    cdx.BOMFormat,
+				SerialNumber: "urn:uuid:550e8400-e29b-11d4-a716-446655440000",
+			},
+			wantErr: true,
+		},
+		"unexpected bom format": {
+			input: cdx.BOM{
+				SpecVersion:  cdx.SpecVersion1_6,
+				BOMFormat:    "something",
+				SerialNumber: "urn:uuid:550e8400-e29b-11d4-a716-446655440000",
+			},
+			wantErr: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			err := uploadInputChecks(tc.input)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
 
 func TestUploadValidateURN(t *testing.T) {
 	testCases := map[string]struct {

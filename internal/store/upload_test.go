@@ -1,9 +1,9 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -11,14 +11,15 @@ import (
 	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
 
-const bucketName = "bucket"
-
 func TestStoreUpload(t *testing.T) {
+	bucketName := "bucket"
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -34,41 +35,43 @@ func TestStoreUpload(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		cbom    cdx.BOM
-		setup   func(mockCtrl *gomock.Controller, cbom cdx.BOM) store.Store
+		key     string
+		setup   func(mockCtrl *gomock.Controller, key string) store.Store
 		wantErr bool
 	}{
 		"success": {
-			cbom: okCBOM,
-			setup: func(mockCtrl *gomock.Controller, cbom cdx.BOM) store.Store {
+			setup: func(mockCtrl *gomock.Controller, key string) store.Store {
 				s3Mock := mockS3.NewMockS3Contract(mockCtrl)
-				s3Mock.EXPECT().PutObject(
+				s3Manager := mockS3.NewMockS3Manager(mockCtrl)
+
+				s3Manager.EXPECT().Upload(
 					gomock.Any(),
 					gomock.AssignableToTypeOf(&s3.PutObjectInput{}),
-				).DoAndReturn(func(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+				).DoAndReturn(func(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*manager.UploadOutput, error) {
 					require.Equal(t, bucketName, *in.Bucket)
-					require.Equal(t, fmt.Sprintf("%s-%d", cbom.SerialNumber, cbom.Version), *in.Key)
-					return &s3.PutObjectOutput{}, nil
+					require.Equal(t, key, *in.Key)
+					return &manager.UploadOutput{}, nil
 				})
 
-				return store.New(s3Mock, bucketName)
+				return store.New(store.Config{Bucket: bucketName}, s3Mock, s3Manager)
 			},
 			wantErr: false,
 		},
 		"put object returns error": {
-			cbom: okCBOM,
-			setup: func(mockCtrl *gomock.Controller, cbom cdx.BOM) store.Store {
+			setup: func(mockCtrl *gomock.Controller, key string) store.Store {
 				s3Mock := mockS3.NewMockS3Contract(mockCtrl)
-				s3Mock.EXPECT().PutObject(
+				s3Manager := mockS3.NewMockS3Manager(mockCtrl)
+
+				s3Manager.EXPECT().Upload(
 					gomock.Any(),
 					gomock.AssignableToTypeOf(&s3.PutObjectInput{}),
-				).DoAndReturn(func(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+				).DoAndReturn(func(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*manager.UploadOutput, error) {
 					require.Equal(t, bucketName, *in.Bucket)
-					require.Equal(t, fmt.Sprintf("%s-%d", cbom.SerialNumber, cbom.Version), *in.Key)
-					return &s3.PutObjectOutput{}, errors.New("abc")
+					require.Equal(t, key, *in.Key)
+					return &manager.UploadOutput{}, errors.New("abc")
 				})
 
-				return store.New(s3Mock, bucketName)
+				return store.New(store.Config{Bucket: bucketName}, s3Mock, s3Manager)
 			},
 			wantErr: true,
 		},
@@ -76,8 +79,15 @@ func TestStoreUpload(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			s := tc.setup(ctrl, tc.cbom)
-			err := s.Upload(context.Background(), tc.cbom)
+			s := tc.setup(ctrl, tc.key)
+			var buf bytes.Buffer
+			require.NoError(t, cdx.NewBOMEncoder(&buf, cdx.BOMFileFormatJSON).Encode(&okCBOM))
+
+			meta := store.Metadata{
+				Timestamp: time.Now().UTC(),
+				Version:   1,
+			}
+			err := s.Upload(context.Background(), tc.key, meta, []byte("some bytes"))
 			if tc.wantErr {
 				require.Error(t, err)
 			} else {

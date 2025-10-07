@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/stretchr/testify/require"
 )
@@ -16,110 +17,197 @@ func TestNewFunc(t *testing.T) {
 	}{
 		"success": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+				"APP_HTTP_PORT":         "8090",
 			},
 			wantErr: false,
 			want: env.Config{
-				StorageEndpoint: "http://localhost:9000",
-				StorageBucket:   "czertainly",
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "czertainly",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				HttpPort: 8090,
 			},
 		},
-		"whitespaces-only-endpoint": {
+		"port has default value": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "  \t  \r   ",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "czertainly",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				HttpPort: 8080,
+			},
+		},
+		"port must be a number": {
+			envVars: map[string]string{
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+				"APP_HTTP_PORT":         "eighty",
 			},
 			wantErr: true,
 		},
+		"path style can be false": {
+			envVars: map[string]string{
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "false",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "czertainly",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: false,
+				},
+				HttpPort: 8080,
+			},
+		},
+		"path style can has default value": {
+			envVars: map[string]string{
+				"APP_S3_REGION":     "eu-west-1",
+				"APP_S3_ENDPOINT":   "http://localhost:9000",
+				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_ACCESS_KEY": "minioadmin",
+				"APP_S3_SECRET_KEY": "adminpassword",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "czertainly",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				HttpPort: 8080,
+			},
+		},
+		"endpoint may be omitted": {
+			envVars: map[string]string{
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Bucket:       "czertainly",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				HttpPort: 8080,
+			},
+		},
 		"whitespaces-only-bucket": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "abcd",
-				"APP_STORAGE_BUCKET":    "\t  \r\n  ",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":     "eu-west-1",
+				"APP_S3_BUCKET":     " \t\r \n  ",
+				"APP_S3_ACCESS_KEY": "minioadmin",
+				"APP_S3_SECRET_KEY": "adminpassword",
 			},
 			wantErr: true,
 		},
 		"whitespaces-only-aws-region": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "   \t ",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":     "  \t \t  ",
+				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_ACCESS_KEY": "minioadmin",
+				"APP_S3_SECRET_KEY": "adminpassword",
 			},
 			wantErr: true,
 		},
-		"whitespaces-only-aws-access-key": {
+		"whitespaces-only-access-key": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "\t\t\r ",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":     "eu-west-1",
+				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_ACCESS_KEY": "      ",
+				"APP_S3_SECRET_KEY": "adminpassword",
 			},
 			wantErr: true,
 		},
 		"whitespaces-only-aws-secret": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "    ",
-			},
-			wantErr: true,
-		},
-		"endpoint-missing": {
-			envVars: map[string]string{
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":     "eu-west-1",
+				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_ACCESS_KEY": "minioadmin",
+				"APP_S3_SECRET_KEY": " \t  \t",
 			},
 			wantErr: true,
 		},
 		"bucket-missing": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
 			},
 			wantErr: true,
 		},
-		"aws-region-missing": {
+		"region-missing": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_ACCESS_KEY_ID":     "minioadmin",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
 			},
 			wantErr: true,
 		},
-		"aws-access-key-missing": {
+		"access-key-missing": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT":  "http://localhost:9000",
-				"APP_STORAGE_BUCKET":    "czertainly",
-				"AWS_REGION":            "eu-west-1",
-				"AWS_SECRET_ACCESS_KEY": "adminpassword",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
 			},
 			wantErr: true,
 		},
-		"aws-secret-missing": {
+		"secret-missing": {
 			envVars: map[string]string{
-				"APP_STORAGE_ENDPOINT": "http://localhost:9000",
-				"APP_STORAGE_BUCKET":   "czertainly",
-				"AWS_REGION":           "eu-west-1",
-				"AWS_ACCESS_KEY_ID":    "minioadmin",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_USE_PATH_STYLE": "true",
 			},
 			wantErr: true,
 		},

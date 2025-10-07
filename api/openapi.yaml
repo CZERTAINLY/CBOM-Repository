@@ -1,0 +1,133 @@
+openapi: 3.0.4
+info:
+  title: CBOM-Repository Service API
+  description: |-
+    REST API for uploading, retrieving and searching Cryptographic Bill Of Materials (CBOM) documents. CBOM follows CycloneDX schema version 1.6.
+  contact:
+    name: CZERTAINLY
+    url: https://www.czertainly.com
+    email: getinfo@czertainly.com
+  license:
+    name: MIT License
+    url: https://github.com/CZERTAINLY/CBOM-Repository/blob/main/LICENSE.md
+  version: 0.1.0
+
+externalDocs:
+  description: CZERTAINLY Documentation
+  url: https://docs.czertainly.com
+
+paths:
+  /api/v1/bom:
+    post:
+      summary: Upload a CBOM (CycloneDX 1.6)
+      operationId: uploadBOM
+      requestBody:
+        required: true
+        content:
+           application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: BOM created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BOMCreateResponse'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict (e.g. BOM with same serialNumber/version already exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: General Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/bom/{urn}:
+    get:
+      summary: Retrieve a BOM by URN
+      operationId: getBOMByUrn
+      parameters:
+        - name: urn
+          in: path
+          description: Unique resource identifier (URN), corresponds to CycloneDX serial number.
+          required: true
+          schema:
+            type: string
+            example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+        - name: version
+          in: query
+          description: Optional `version`. If omitted, returns latest version.
+          required: false
+          schema:
+            type: integer
+            example: 1
+      responses:
+        '200':
+          description: Requested BOM
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: BOM not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request (invalid URN or version)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: General Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    BOM:
+      type: string
+      format: binary
+
+    BOMCreateResponse:
+      type: object
+      description: Response returned after uploading a BOM.
+      properties:
+        serialNumber:
+          type: string
+          description: CycloneDX serial number (URN, RFC-4122).
+          example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+        version:
+          type: integer
+          description: CycloneDX integer version number for the BOM document
+          example: 1
+      required:
+        - serialNumber
+        - version
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Missing required parameter 'after'."
+      required:
+        - message
+
+
