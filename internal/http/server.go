@@ -89,7 +89,10 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
+		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
 	slog.InfoContext(ctx, "Finished.", slog.Group(
 		"response",
 		slog.String("serialNumber", resp.SerialNumber),
@@ -152,7 +155,10 @@ func (h Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
+		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
 	slog.InfoContext(ctx, "Finished.")
 }
 
@@ -223,6 +229,9 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
+		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
 	slog.InfoContext(ctx, "Finished.", slog.Int("response-count", len(resp)))
 }

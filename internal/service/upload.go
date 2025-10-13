@@ -30,7 +30,9 @@ func (s Service) UploadSBOM(ctx context.Context, rc io.ReadCloser, schemaVersion
 
 	var buf bytes.Buffer
 	tee := io.TeeReader(rc, &buf)
-	defer rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 
 	ctx = log.ContextAttrs(ctx, slog.String("declared-sbom-schema-version", schemaVersion))
 

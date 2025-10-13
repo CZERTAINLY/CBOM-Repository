@@ -25,7 +25,7 @@ func schemaLoaderFunc(httpClient *http.Client, timeout time.Duration) func(strin
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil, fmt.Errorf("received non-200 status code: %s", resp.Status)
 		}
 
