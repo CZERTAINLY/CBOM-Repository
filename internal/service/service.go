@@ -1,202 +1,190 @@
 package service
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/oas"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
-	cdx "github.com/CycloneDX/cyclonedx-go"
-	"github.com/google/uuid"
 	jss "github.com/kaptinlin/jsonschema"
 )
 
 const (
 	httpClientTimeout = time.Second * 30
-	jsonBOMSchemaV1_6 = "https://raw.githubusercontent.com/CycloneDX/specification/refs/heads/master/schema/bom-1.6.schema.json"
 )
 
-type Service struct {
-	oas.UnimplementedHandler
-	httpClient *http.Client
-	store      store.Store
-	jsonSchema *jss.Schema
+var (
+	ErrValidation    = errors.New("validation failed")
+	ErrAlreadyExists = errors.New("already exists")
+	ErrNotFound      = errors.New("not found")
+)
+
+type SupportedVersions map[string]string
+
+// Expected "<version-string^1>=<schema-uri^1>, <version-string^2>=<schema-uri^2>, ..."
+func (s *SupportedVersions) Decode(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("value is an empty string")
+	}
+	m := make(map[string]string)
+	items := strings.Split(value, ",")
+
+	for _, item := range items {
+		before, after, found := strings.Cut(item, "=")
+		if !found {
+			return fmt.Errorf("invalid item: %s", item)
+		}
+		key := strings.TrimSpace(before)
+		if _, ok := m[key]; ok {
+			return fmt.Errorf("duplicate key: %s", key)
+		}
+		m[key] = strings.TrimSpace(after)
+	}
+	*s = m
+	return nil
 }
 
-func New(store store.Store) (Service, error) {
+type Config struct {
+	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" required:"true"`
+}
+
+type Service struct {
+	cfg         Config
+	httpClient  *http.Client
+	store       store.Store
+	jsonSchemas map[string]*jss.Schema
+}
+
+func New(cfg Config, store store.Store) (Service, error) {
 	httpClient := &http.Client{
 		Timeout: httpClientTimeout, // safeguard if context aware method is not used for requests
 	}
 
-	compiler := jss.NewCompiler()
-	compiler.RegisterLoader(jsonBOMSchemaV1_6, schemaLoaderFunc(httpClient, 10*time.Second))
-	schema, err := compiler.GetSchema(jsonBOMSchemaV1_6)
-	if err != nil {
-		return Service{}, fmt.Errorf("json schema compiler `GetSchema()` failed: %w", err)
+	jsonSchemas := make(map[string]*jss.Schema, len(cfg.Versions))
+	for version, uri := range cfg.Versions {
+		compiler := jss.NewCompiler()
+		compiler.RegisterLoader(uri, schemaLoaderFunc(httpClient, 10*time.Second))
+		schema, err := compiler.GetSchema(uri)
+		if err != nil {
+			return Service{}, fmt.Errorf("json schema compiler `GetSchema()` failed for URI %s: %w", uri, err)
+		}
+		jsonSchemas[version] = schema
 	}
 
 	return Service{
-		httpClient: httpClient,
-		jsonSchema: schema,
-		store:      store,
+		cfg:         cfg,
+		httpClient:  httpClient,
+		jsonSchemas: jsonSchemas,
+		store:       store,
 	}, nil
 }
 
-func (s Service) NewError(_ context.Context, err error) *oas.ErrorStatusCode {
-	return &oas.ErrorStatusCode{
-		StatusCode: http.StatusInternalServerError,
-		Response: oas.Error{
-			Message: err.Error(),
-		},
-	}
+func (s Service) SupportedVersion() []string {
+	return slices.Sorted(maps.Keys(s.jsonSchemas))
 }
 
-func (s Service) GetBOMByUrn(ctx context.Context, params oas.GetBOMByUrnParams) (oas.GetBOMByUrnRes, error) {
-	var rt oas.GetBOMByUrnOKApplicationJSON
+func (s Service) VersionSupported(version string) bool {
+	if _, ok := s.jsonSchemas[version]; ok {
+		return true
+	}
+	return false
+}
 
-	if !params.Version.IsSet() {
-		versions, err := s.store.GetObjectVersions(ctx, params.Urn)
+type SearchRes struct {
+	URN     string `json:"serialNumber"`
+	Version string `json:"version"`
+}
+
+func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
+	res := []SearchRes{}
+
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"service-layer",
+		slog.Int64("timestamp", ts),
+	))
+
+	slog.DebugContext(ctx, "Calling `store.Search()`.")
+
+	r, err := s.store.Search(ctx, ts)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "`store.Search()` finished.",
+		slog.Group(
+			"response",
+			slog.Int("count", len(r)),
+			slog.String("value", strings.Join(r, ",")),
+		),
+	)
+
+	for _, cpy := range r {
+		idx := strings.LastIndex(cpy, "-")
+		if idx == -1 {
+			slog.ErrorContext(ctx, "Key does NOT adhere to the naming invariant.",
+				slog.String("key", cpy), slog.String("expected-format", "urn:uuid:<uuid>-<version>"))
+			return nil, errors.New("unexpected key returned from store")
+		}
+		res = append(res, SearchRes{
+			URN:     cpy[:idx],
+			Version: cpy[idx+1:],
+		})
+	}
+	return res, nil
+}
+
+func (s Service) GetSBOMByUrn(ctx context.Context, urn, version string) (map[string]interface{}, error) {
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"service-layer",
+		slog.String("urn", urn),
+		slog.String("version", version),
+	))
+
+	if strings.TrimSpace(version) == "" {
+		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersion()` to obtain the latest SBOM version stored.")
+		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, urn)
 		switch {
 		case errors.Is(err, store.ErrNotFound):
-			return &oas.GetBOMByUrnNotFound{
-				Message: fmt.Sprintf("CBOM does not exist, serial number %q.", params.Urn),
-			}, nil
+			return nil, ErrNotFound
 
 		case err != nil:
 			return nil, err
 		}
 
-		params.Version.SetTo(versions[len(versions)-1])
+		version = fmt.Sprintf("%d", versions[len(versions)-1])
+		slog.DebugContext(ctx, "Latest version selected.",
+			slog.Any("all-versions", versions),
+			slog.String("selected-version", version),
+			slog.Bool("has-original", hasOriginal),
+		)
+		ctx = log.ContextAttrs(ctx, slog.String("selected-version", version))
 	}
 
-	b, err := s.store.GetObject(ctx, fmt.Sprintf("%s-%d", params.Urn, params.Version.Value))
+	slog.DebugContext(ctx, "Calling `store.GetObject()`.")
+	b, err := s.store.GetObject(ctx, fmt.Sprintf("%s-%s", urn, version))
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		return &oas.GetBOMByUrnNotFound{
-			Message: fmt.Sprintf("CBOM does not exist, serial number %q, version %d.", params.Urn, params.Version.Value),
-		}, nil
+		return nil, ErrNotFound
 
 	case err != nil:
 		return nil, err
 	}
+	slog.DebugContext(ctx, "`store.GetObject()` finished.", slog.Int64("size", int64(len(b))))
 
-	rt = oas.GetBOMByUrnOKApplicationJSON(b)
-	return &rt, nil
-}
-
-func (s Service) UploadBOM(ctx context.Context, req oas.UploadBOMReq) (oas.UploadBOMRes, error) {
-
-	b, err := io.ReadAll(req.Data)
-	if err != nil {
+	var sbomMap map[string]interface{}
+	if err := json.Unmarshal(b, &sbomMap); err != nil {
+		slog.ErrorContext(ctx, "`json.Unmarshal()` failed.", slog.String("error", err.Error()))
 		return nil, err
 	}
 
-	vres := s.jsonSchema.Validate(b)
-	if !vres.IsValid() {
-		return &oas.UploadBOMBadRequest{
-			Message: fmt.Sprintf("Uploaded JSON does not conform to the following schema: %s",
-				jsonBOMSchemaV1_6),
-		}, nil
-	}
-
-	var cbom cdx.BOM
-	decoder := cdx.NewBOMDecoder(bytes.NewReader(b), cdx.BOMFileFormatJSON)
-	if err := decoder.Decode(&cbom); err != nil {
-		return nil, err
-	}
-
-	if err := uploadInputChecks(cbom); err != nil {
-		return &oas.UploadBOMBadRequest{
-			Message: fmt.Sprintf("Upload input check failed: %s.", err),
-		}, nil
-	}
-
-	if cbom.SerialNumber == "" {
-		// serial number is missing, so we're going to generate a unique new one,
-		// that means this will be version 1, even if something else was set
-		cbom.Version = 1
-
-		for {
-			// generate a new urn and make sure we don't conflict with an exsiting one
-			cbom.SerialNumber = fmt.Sprintf("urn:uuid:%s", uuid.NewString())
-			exists, err := s.store.KeyExists(ctx, uploadKey(cbom.SerialNumber, cbom.Version))
-			if err != nil {
-				return nil, err
-			}
-			if !exists {
-				break
-			}
-		}
-	} else {
-		// serial number of the CBOM is valid, let's make sure it doesn't exist already
-		exists, err := s.store.KeyExists(ctx, uploadKey(cbom.SerialNumber, cbom.Version))
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return &oas.UploadBOMConflict{
-				Message: fmt.Sprintf("CBOM already exists, serial number %q, version %q.",
-					cbom.SerialNumber, cbom.Version),
-			}, nil
-		}
-	}
-	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   cbom.Version,
-	}
-
-	if err := s.store.Upload(ctx, uploadKey(cbom.SerialNumber, cbom.Version), meta, b); err != nil {
-		return nil, err
-	}
-
-	return &oas.BOMCreateResponse{
-		SerialNumber: cbom.SerialNumber,
-		Version:      cbom.Version,
-	}, nil
-}
-
-// uploadInputChecks returns error in case CBOM fails any of the input checks,
-// nil otherwise.
-func uploadInputChecks(cbom cdx.BOM) error {
-	if cbom.SpecVersion != cdx.SpecVersion1_6 {
-		return fmt.Errorf("required version %s", cdx.SpecVersion1_6)
-	}
-	if cbom.BOMFormat != cdx.BOMFormat {
-		return fmt.Errorf("required format %s", cdx.BOMFormat)
-	}
-	// if the serial number is set, it must be a valid URN conforming to RFC 4122
-	if cbom.SerialNumber != "" && !uploadValidateURN(cbom.SerialNumber) {
-		return fmt.Errorf("serial number not valid")
-	}
-	return nil
-}
-
-// uploadValidateURN returns true if `urn` is a valid URN conforming to RFC-4122.
-// URN format is defined as `urn:<NID>:<NSS>`
-// where:
-//   - <NID> means Namespace Identifier. For RFC-4122 this means exactly "uuid" string.
-//   - <NSS> means Namespace Specific String. For RFC-4122 this means a valid UUID.
-func uploadValidateURN(urn string) bool {
-	subs := strings.Split(urn, ":")
-	if len(subs) != 3 {
-		return false
-	}
-	if subs[0] != "urn" || subs[1] != "uuid" {
-		return false
-	}
-	if _, err := uuid.Parse(subs[2]); err != nil {
-		return false
-	}
-	return true
-}
-
-func uploadKey(urn string, version int) string {
-	return fmt.Sprintf("%s-%d", urn, version)
+	return sbomMap, nil
 }

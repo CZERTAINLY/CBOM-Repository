@@ -2,8 +2,10 @@ package env
 
 import (
 	"errors"
+	"log/slog"
 	"strings"
 
+	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/kelseyhightower/envconfig"
@@ -14,6 +16,8 @@ const defaultPrefix = "APP"
 type Config struct {
 	Store    store.Config
 	HttpPort int `envconfig:"APP_HTTP_PORT" default:"8080"`
+	Service  service.Config
+	LogLevel slog.Level `envconfig:"APP_LOG_LEVEL" default:"INFO"`
 }
 
 func New() (Config, error) {

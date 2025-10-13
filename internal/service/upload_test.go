@@ -52,7 +52,7 @@ func TestUploadInputChecks(t *testing.T) {
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			err := uploadInputChecks(tc.input)
+			err := uploadInputChecks(tc.input, "1.6")
 			if tc.wantErr {
 				require.Error(t, err)
 			} else {

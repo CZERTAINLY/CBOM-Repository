@@ -18,7 +18,7 @@ services:
       /bin/sh -c "
       until /usr/bin/mc alias set myminio http://minio-s3:9000 minioadmin minioadmin; do
         echo 'Waiting for MinIO to be ready...';
-        sleep 2;
+        sleep 1;
       done;
       /usr/bin/mc mb myminio/czert;
       exit 0;

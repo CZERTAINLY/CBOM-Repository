@@ -1,12 +1,15 @@
-openapi: 3.0.4
+openapi: 3.1.1
 info:
   title: CBOM-Repository Service API
   description: |-
-    REST API for uploading, retrieving and searching Cryptographic Bill Of Materials (CBOM) documents. CBOM follows CycloneDX schema version 1.6.
+    REST API for uploading, retrieving and searching of cryptographic software bill of materials documents.
+    A cryptographic software bill of materials document adheres to CycloneDX schema version 1.6.
+
   contact:
     name: CZERTAINLY
     url: https://www.czertainly.com
     email: getinfo@czertainly.com
+
   license:
     name: MIT License
     url: https://github.com/CZERTAINLY/CBOM-Repository/blob/main/LICENSE.md
@@ -17,47 +20,55 @@ externalDocs:
   url: https://docs.czertainly.com
 
 paths:
-  /api/v1/bom:
+  /api/v1/sbom:
     post:
-      summary: Upload a CBOM (CycloneDX 1.6)
-      operationId: uploadBOM
+      summary: Upload a SBOM
+      operationId: uploadSBOM
       requestBody:
         required: true
         content:
-           application/octet-stream:
+           application/vnd.cyclonedx+json:
             schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
               type: string
               format: binary
+
       responses:
         '201':
-          description: BOM created
+          description: SBOM created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BOMCreateResponse'
+                $ref: '#/components/schemas/SBOMCreateResponse'
         '400':
-          description: Invalid payload
+          description: Bad Request
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ProblemDetails'
         '409':
-          description: Conflict (e.g. BOM with same serialNumber/version already exists)
+          description: Conflict (e.g. SBOM with same serialNumber/version already exists)
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ProblemDetails'
+        '415':
+          description: Unsupported media type (e.g. wrong content type, or unsupported CDX version)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         default:
           description: General Error
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ProblemDetails"
 
-  /api/v1/bom/{urn}:
+  /api/v1/sbom/{urn}:
     get:
-      summary: Retrieve a BOM by URN
-      operationId: getBOMByUrn
+      summary: Retrieve a SBOM by URN
+      operationId: getSBOMByUrn
       parameters:
         - name: urn
           in: path
@@ -75,39 +86,75 @@ paths:
             example: 1
       responses:
         '200':
-          description: Requested BOM
+          description: Requested SBOM
           content:
-            application/json:
+            application/vnd.cyclonedx+json:
               schema:
                 type: string
                 format: binary
         '404':
-          description: BOM not found
+          description: SBOM not found
           content:
-            application/json:
+            application/problem+json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Bad request (invalid URN or version)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/ProblemDetails'
         default:
           description: General Error
           content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /api/v1/sbom:
+    get:
+      summary: Search SBOMs created after a timestamp
+      operationId: getSBOMs
+      parameters:
+        - name: after
+          in: query
+          description: Unix timestamp
+          required: true
+          schema:
+            type: int
+      responses:
+        "200":
+          description: Array of SBOM entries (serialNumber + version)
+          content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                type: array
+                items:
+                  $ref: '#/components/schemas/SBOMEntry'
+        default:
+          description: General Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+
 components:
   schemas:
-    BOM:
-      type: string
-      format: binary
 
-    BOMCreateResponse:
+    SBOMEntry:
       type: object
-      description: Response returned after uploading a BOM.
+      required:
+        - serialNumber
+        - version
+      properties:
+        serialNumber:
+          type: string
+          description: SBOM serial number
+          example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+        version:
+          type: string
+          description: SOBM Version - number or `original` string
+          example: "1"
+
+    SBOMCreateResponse:
+      $schema: https://json-schema.org/draft/2020-12/schema
+      type: object
+      description: Response returned after uploading a SBOM.
       properties:
         serialNumber:
           type: string
@@ -115,19 +162,40 @@ components:
           example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
         version:
           type: integer
-          description: CycloneDX integer version number for the BOM document
+          description: CycloneDX integer version number for the SBOM document
           example: 1
-      required:
-        - serialNumber
-        - version
+      required: [serialNumber, version]
+      additionalProperties: false
 
-    Error:
+    # RFC 9457 Problem Details (JSON only)
+    ProblemDetails:
+      $schema: https://json-schema.org/draft/2020-12/schema
       type: object
+      description: Problem Details per RFC 9457 (application/problem+json).
       properties:
-        message:
+        type:
           type: string
-          example: "Missing required parameter 'after'."
-      required:
-        - message
+          format: uri-reference
+          description: A URI reference that identifies the problem type. Defaults to "about:blank".
+          example: "https://example.com/problems/invalid-payload"
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+          example: "Invalid payload"
+        status:
+          type: integer
+          description: HTTP status code for this occurrence of the problem.
+          example: 400
+        detail:
+          type: string
+          description: Human-readable explanation specific to this occurrence.
+          example: "The 'serialNumber' field is missing."
+        instance:
+          type: string
+          format: uri-reference
+          description: A URI reference that identifies the specific occurrence of the problem.
+          example: "urn:uuid:4b96f3f7-0c2a-43f7-9c0a-7b0b6a3e2a61"
+      additionalProperties: true
+
 
 

@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -56,13 +59,13 @@ type Store struct {
 
 type Metadata struct {
 	Timestamp time.Time
-	Version   int
+	Version   string
 }
 
 func (m Metadata) Map() map[string]string {
 	return map[string]string{
 		MetaTimestampKey: fmt.Sprintf("%d", m.Timestamp.Unix()),
-		MetaVersionKey:   fmt.Sprintf("%d", m.Version),
+		MetaVersionKey:   m.Version,
 	}
 }
 
@@ -76,7 +79,43 @@ func New(cfg Config, s3Client S3Contract, s3Manager S3Manager) Store {
 	return s
 }
 
-func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, error) {
+func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"store-layer",
+		slog.Int64("timestamp", ts),
+		slog.String("method", "Search"),
+	))
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.cfg.Bucket),
+	}
+
+	unixTimestamp := time.Unix(ts, 0)
+
+	var err error
+	var output *s3.ListObjectsV2Output
+	res := []string{}
+
+	objectPaginator := s3.NewListObjectsV2Paginator(s.s3Client, input)
+	for objectPaginator.HasMorePages() {
+		if output, err = objectPaginator.NextPage(ctx); err != nil {
+			slog.ErrorContext(ctx, "`s3.paginator.NextPage()` failed.", slog.String("error", err.Error()))
+			return nil, err
+		}
+		for _, cpy := range output.Contents {
+			if unixTimestamp.Before(*cpy.LastModified) {
+				res = append(res, *cpy.Key)
+			}
+		}
+	}
+	return res, nil
+}
+
+func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, bool, error) {
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"store-layer",
+		slog.String("urn", urn),
+		slog.String("method", "GetObjectVersions"),
+	))
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.Bucket),
 		Prefix: aws.String(urn),
@@ -89,33 +128,53 @@ func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, error)
 	objectPaginator := s3.NewListObjectsV2Paginator(s.s3Client, input)
 	for objectPaginator.HasMorePages() {
 		if output, err = objectPaginator.NextPage(ctx); err != nil {
-			return nil, err
+			slog.ErrorContext(ctx, "`s3.paginator.NextPage()` failed.", slog.String("error", err.Error()))
+			return nil, false, err
 		}
 		objects = append(objects, output.Contents...)
 	}
 
 	if len(objects) == 0 {
-		return nil, ErrNotFound
+		return nil, false, ErrNotFound
 	}
 
 	// post process just the versions
 	var res []int
+	var hasOriginal bool
 	for _, cpy := range objects {
 		after, found := strings.CutPrefix(*cpy.Key, fmt.Sprintf("%s-", urn))
 		if !found {
-			return nil, errors.New("internal error")
+			slog.ErrorContext(ctx, "Unexpected suffix in s3 key.",
+				slog.String("key", *cpy.Key),
+				slog.String("key format invariant", "urn:uuid:<uuid>-<version>"),
+			)
+			return nil, false, fmt.Errorf("unexpected key %s", *cpy.Key)
+		}
+		if after == "original" {
+			hasOriginal = true
+			continue
 		}
 		ver, err := strconv.Atoi(after)
 		if err != nil {
-			return nil, errors.New("internal error")
+			slog.ErrorContext(ctx, "Unexpected suffix in s3 key, suffix should be a number",
+				slog.String("key", *cpy.Key),
+				slog.String("suffix", after),
+				slog.String("key format invariant", "urn:uuid:<uuid>-<version>"),
+			)
+			return nil, false, fmt.Errorf("unexpected suffix %s", after)
 		}
 		res = append(res, ver)
 	}
 	sort.Ints(res)
-	return res, nil
+	return res, hasOriginal, nil
 }
 
 func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"store-layer",
+		slog.String("key", key),
+		slog.String("method", "GetObject"),
+	))
 	result, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
 		Key:    aws.String(key),
@@ -129,6 +188,7 @@ func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 		return nil, ErrNotFound
 
 	case err != nil:
+		slog.ErrorContext(ctx, "`s3.GetObject()` failed.", slog.String("error", err.Error()))
 		return nil, err
 	}
 
@@ -136,6 +196,7 @@ func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 
 	b, err := io.ReadAll(result.Body)
 	if err != nil {
+		slog.ErrorContext(ctx, "`io.ReadAll()` failed.", slog.String("error", err.Error()))
 		return nil, err
 	}
 
@@ -143,6 +204,11 @@ func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"store-layer",
+		slog.String("key", key),
+		slog.String("method", "KeyExists"),
+	))
 	_, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
 		Key:    aws.String(key),
@@ -157,11 +223,18 @@ func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
 		return false, nil
 	}
 
+	slog.ErrorContext(ctx, "`s3.HeadObject()` failed.", slog.String("error", err.Error()))
 	return false, err
 }
 
 func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents []byte) error {
-
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"store-layer",
+		slog.String("key", key),
+		slog.Int64("size", int64(len(contents))),
+		slog.Any("metadata", meta),
+		slog.String("method", "Upload"),
+	))
 	input := &s3.PutObjectInput{
 		Bucket:            aws.String(s.cfg.Bucket),
 		Key:               aws.String(key),
@@ -172,6 +245,7 @@ func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents [
 	}
 	_, err := s.s3Manager.Upload(ctx, input)
 	if err != nil {
+		slog.ErrorContext(ctx, "`s3.manager.Upload()` failed.", slog.String("error", err.Error()))
 		return err
 	}
 
