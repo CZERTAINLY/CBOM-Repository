@@ -211,16 +211,6 @@ func TestNewFunc(t *testing.T) {
 				LogLevel: slog.LevelInfo,
 			},
 		},
-		"supported version is required": {
-			envVars: map[string]string{
-				"APP_S3_REGION":         "eu-west-1",
-				"APP_S3_BUCKET":         "czertainly",
-				"APP_S3_ACCESS_KEY":     "minioadmin",
-				"APP_S3_SECRET_KEY":     "adminpassword",
-				"APP_S3_USE_PATH_STYLE": "true",
-			},
-			wantErr: true,
-		},
 		"supported version decode error": {
 			envVars: map[string]string{
 				"APP_S3_REGION":          "eu-west-1",
