@@ -25,11 +25,26 @@ func New(svc service.Service) Server {
 	}
 }
 
+func (h Server) BomHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.Upload(w, r)
+	case http.MethodGet:
+		h.Search(w, r)
+	default:
+		// Return Problem Document for unsupported methods
+		details.MethodNotAllowed(w,
+			fmt.Sprintf("Method %s not allowed for %s.", r.Method, r.URL.Path),
+			[]string{http.MethodGet, http.MethodPost})
+		return
+	}
+}
+
 func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	// Assert http POST
 	if r.Method != http.MethodPost {
 		details.MethodNotAllowed(w,
-			fmt.Sprintf("Method %s not allowed for %s.", r.Method, r.URL.Path),
+			fmt.Sprintf("Method %s not allowed for %s", r.Method, r.URL.Path),
 			[]string{http.MethodPost})
 		return
 	}
@@ -38,14 +53,14 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	ok, version := CheckContentType(r.Header.Get("content-type"))
 	if !ok {
 		details.UnsupportedMediaType(w,
-			fmt.Sprintf("Content type %s not allowed for %s.", r.Method, r.URL.Path),
+			fmt.Sprintf("Content type %s not allowed for %s", r.Method, r.URL.Path),
 			[]string{"application/vnd.cyclonedx+json"})
 		return
 	}
 
 	if !h.service.VersionSupported(version) {
 		details.BadRequest(w,
-			fmt.Sprintf("Version %s not supported.", version),
+			fmt.Sprintf("Version %s not supported", version),
 			map[string]any{"supported-versions": h.service.SupportedVersion()},
 		)
 		return
@@ -60,12 +75,12 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(ctx, "Start.")
 
-	resp, err := h.service.UploadSBOM(ctx, r.Body, version)
+	resp, err := h.service.UploadBOM(ctx, r.Body, version)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAlreadyExists):
 			details.Conflict(w,
-				"Conflict with existing SBOM",
+				"Conflict with existing BOM",
 				map[string]any{
 					"conflict-details": map[string]any{
 						"serial-number": resp.SerialNumber,
@@ -75,13 +90,13 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		case errors.Is(err, service.ErrValidation):
 			details.BadRequest(w,
-				"Validation of SBOM failed.",
+				"Validation of BOM failed.",
 				map[string]any{"error": err.Error()},
 			)
 			return
 		}
 		details.Internal(w,
-			"Upload of SBOM failed.",
+			"Upload of BOM failed.",
 			map[string]any{
 				"error": err.Error(),
 			})
@@ -110,7 +125,7 @@ func (h Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract params
-	prefix := "/api/v1/sbom/"
+	prefix := RouteBOM + "/"
 	if !strings.HasPrefix(r.URL.Path, prefix) {
 		// this is deliberate and MUST be fixed in internal/http/handler.go
 		panic("bad router mapping")
@@ -120,7 +135,7 @@ func (h Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	if urn == "" {
 		details.BadRequest(w,
 			"Missing `{urn}` path variable.",
-			map[string]any{"example": "GET /api/v1/sbom/urn:uuid:<uuid>"},
+			map[string]any{"example": "GET /api/v1/bom/urn:uuid:<uuid>"},
 		)
 		return
 	}
@@ -138,15 +153,15 @@ func (h Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(ctx, "Start.")
 
-	resp, err := h.service.GetSBOMByUrn(ctx, urn, version)
+	resp, err := h.service.GetBOMByUrn(ctx, urn, version)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNotFound):
-			details.NotFound(w, "Requested SBOM not found.")
+			details.NotFound(w, "Requested BOM not found.")
 			return
 		}
 		details.Internal(w,
-			"Failed to get the requested SBOM.",
+			"Failed to get the requested BOM.",
 			map[string]any{
 				"error": err.Error(),
 			})
@@ -220,7 +235,7 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.service.Search(ctx, i)
 	if err != nil {
 		details.Internal(w,
-			"Failed to get the requested SBOM.",
+			"Failed to get the requested BOM.",
 			map[string]any{
 				"error": err.Error(),
 			})

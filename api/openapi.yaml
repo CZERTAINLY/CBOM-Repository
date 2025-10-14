@@ -20,10 +20,10 @@ externalDocs:
   url: https://docs.czertainly.com
 
 paths:
-  /api/v1/sbom:
+  /api/v1/bom:
     post:
-      summary: Upload a SBOM
-      operationId: uploadSBOM
+      summary: Upload a BOM
+      operationId: uploadBOM
       requestBody:
         required: true
         content:
@@ -35,11 +35,11 @@ paths:
 
       responses:
         '201':
-          description: SBOM created
+          description: BOM created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SBOMCreateResponse'
+                $ref: '#/components/schemas/BOMCreateResponse'
         '400':
           description: Bad Request
           content:
@@ -47,7 +47,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '409':
-          description: Conflict (e.g. SBOM with same serialNumber/version already exists)
+          description: Conflict (e.g. BOM with same serialNumber/version already exists)
           content:
             application/problem+json:
               schema:
@@ -64,11 +64,36 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
-
-  /api/v1/sbom/{urn}:
     get:
-      summary: Retrieve a SBOM by URN
-      operationId: getSBOMByUrn
+      summary: Search BOMs created after a timestamp
+      operationId: getBOMs
+      parameters:
+        - name: after
+          in: query
+          description: Unix timestamp
+          required: true
+          schema:
+            type: int
+      responses:
+        "200":
+          description: Array of BOM entries (serialNumber + version)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BOMEntry'
+        default:
+          description: General Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
+  /api/v1/bom/{urn}:
+    get:
+      summary: Retrieve a BOM by URN
+      operationId: getBOMByUrn
       parameters:
         - name: urn
           in: path
@@ -86,14 +111,14 @@ paths:
             example: 1
       responses:
         '200':
-          description: Requested SBOM
+          description: Requested BOM
           content:
             application/vnd.cyclonedx+json:
               schema:
                 type: string
                 format: binary
         '404':
-          description: SBOM not found
+          description: BOM not found
           content:
             application/problem+json:
               schema:
@@ -105,38 +130,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
-  /api/v1/sbom:
-    get:
-      summary: Search SBOMs created after a timestamp
-      operationId: getSBOMs
-      parameters:
-        - name: after
-          in: query
-          description: Unix timestamp
-          required: true
-          schema:
-            type: int
-      responses:
-        "200":
-          description: Array of SBOM entries (serialNumber + version)
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SBOMEntry'
-        default:
-          description: General Error
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ProblemDetails"
-
-
 components:
   schemas:
 
-    SBOMEntry:
+    BOMEntry:
       type: object
       required:
         - serialNumber
@@ -144,17 +141,17 @@ components:
       properties:
         serialNumber:
           type: string
-          description: SBOM serial number
+          description: BOM serial number
           example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
         version:
           type: string
-          description: SOBM Version - number or `original` string
+          description: BOM Version - number or `original` string
           example: "1"
 
-    SBOMCreateResponse:
+    BOMCreateResponse:
       $schema: https://json-schema.org/draft/2020-12/schema
       type: object
-      description: Response returned after uploading a SBOM.
+      description: Response returned after uploading a BOM.
       properties:
         serialNumber:
           type: string
@@ -162,7 +159,7 @@ components:
           example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
         version:
           type: integer
-          description: CycloneDX integer version number for the SBOM document
+          description: CycloneDX integer version number for the BOM document
           example: 1
       required: [serialNumber, version]
       additionalProperties: false

@@ -21,12 +21,12 @@ import (
 	"github.com/google/uuid"
 )
 
-type SBOMCreated struct {
+type BOMCreated struct {
 	SerialNumber string `json:"serialNumber"`
 	Version      int    `json:"version"`
 }
 
-func (s Service) UploadSBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (SBOMCreated, error) {
+func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
 
 	var buf bytes.Buffer
 	tee := io.TeeReader(rc, &buf)
@@ -34,43 +34,43 @@ func (s Service) UploadSBOM(ctx context.Context, rc io.ReadCloser, schemaVersion
 		_ = rc.Close()
 	}()
 
-	ctx = log.ContextAttrs(ctx, slog.String("declared-sbom-schema-version", schemaVersion))
+	ctx = log.ContextAttrs(ctx, slog.String("declared-bom-schema-version", schemaVersion))
 
-	var sbom cdx.BOM
+	var bom cdx.BOM
 	decoder := cdx.NewBOMDecoder(tee, cdx.BOMFileFormatJSON)
-	if err := decoder.Decode(&sbom); err != nil {
+	if err := decoder.Decode(&bom); err != nil {
 		slog.ErrorContext(ctx, "`cdx.Decode()` failed.", slog.String("error", err.Error()))
-		return SBOMCreated{}, err
+		return BOMCreated{}, err
 	}
 
-	if err := uploadInputChecks(sbom, schemaVersion); err != nil {
-		return SBOMCreated{}, fmt.Errorf("%w: %s", ErrValidation, err)
+	if err := uploadInputChecks(bom, schemaVersion); err != nil {
+		return BOMCreated{}, fmt.Errorf("%w: %s", ErrValidation, err)
 	}
 
 	jsonSchema, ok := s.jsonSchemas[schemaVersion]
 	if !ok {
 		// this shouldn't happen, if http handler correctly checks against `VersionSupported()`
-		return SBOMCreated{}, fmt.Errorf("schema validator missing for version %s", schemaVersion)
+		return BOMCreated{}, fmt.Errorf("schema validator missing for version %s", schemaVersion)
 	}
 
 	res := jsonSchema.Validate(buf.Bytes())
 	if !res.IsValid() {
-		return SBOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
+		return BOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
 	}
 
 	switch {
-	case sbom.SerialNumber == "":
-		slog.DebugContext(ctx, "SBOM does not have serial number specified - generating a new one.")
+	case bom.SerialNumber == "":
+		slog.DebugContext(ctx, "BOM does not have serial number specified - generating a new one.")
 		// serial number is missing, so we're going to generate a unique new one,
 		// that means this will be version 1, even if something else was set
-		sbom.Version = 1
+		bom.Version = 1
 
 		for {
 			// generate a new urn and make sure we don't conflict with an exsiting one
-			sbom.SerialNumber = fmt.Sprintf("urn:uuid:%s", uuid.NewString())
-			exists, err := s.store.KeyExists(ctx, uploadKey(sbom.SerialNumber, sbom.Version))
+			bom.SerialNumber = fmt.Sprintf("urn:uuid:%s", uuid.NewString())
+			exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
 			if err != nil {
-				return SBOMCreated{}, err
+				return BOMCreated{}, err
 			}
 			if !exists {
 				break
@@ -78,110 +78,110 @@ func (s Service) UploadSBOM(ctx context.Context, rc io.ReadCloser, schemaVersion
 		}
 		ctx = log.ContextAttrs(ctx, slog.Group(
 			"service-layer",
-			slog.String("new-serial-number", sbom.SerialNumber)),
+			slog.String("new-serial-number", bom.SerialNumber)),
 		)
 		slog.DebugContext(ctx, "New serial number generated.")
 
-		// store the original unchanged SBOM
+		// store the original unchanged BOM
 		metaOriginal := store.Metadata{
 			Timestamp: time.Now().UTC(),
 			Version:   "original",
 		}
-		if err := s.store.Upload(ctx, uploadKeyOriginal(sbom.SerialNumber), metaOriginal, buf.Bytes()); err != nil {
-			return SBOMCreated{}, err
+		if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, buf.Bytes()); err != nil {
+			return BOMCreated{}, err
 		}
-		slog.DebugContext(ctx, "Stored original SBOM")
+		slog.DebugContext(ctx, "Stored original BOM")
 
-		// store the modified SBOM with serialNumber and version set
+		// store the modified BOM with serialNumber and version set
 		meta := store.Metadata{
 			Timestamp: time.Now().UTC(),
-			Version:   fmt.Sprintf("%d", sbom.Version),
+			Version:   fmt.Sprintf("%d", bom.Version),
 		}
 
 		var modifiedBuf bytes.Buffer
 		encoder := cdx.NewBOMEncoder(&modifiedBuf, cdx.BOMFileFormatJSON)
-		if err := encoder.Encode(&sbom); err != nil {
+		if err := encoder.Encode(&bom); err != nil {
 			slog.ErrorContext(ctx, "`cdx.Encode()` failed.", slog.String("error", err.Error()))
-			return SBOMCreated{}, err
+			return BOMCreated{}, err
 		}
 
-		if err := s.store.Upload(ctx, uploadKey(sbom.SerialNumber, sbom.Version), meta, modifiedBuf.Bytes()); err != nil {
-			return SBOMCreated{}, err
+		if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
+			return BOMCreated{}, err
 		}
 		slog.DebugContext(ctx, "Stored modified version")
 
-	case sbom.Version < 1:
-		slog.DebugContext(ctx, "SBOM has only serial number specified - fetching the latest version")
-		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, sbom.SerialNumber)
+	case bom.Version < 1:
+		slog.DebugContext(ctx, "BOM has only serial number specified - fetching the latest version")
+		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, bom.SerialNumber)
 		if err != nil {
-			return SBOMCreated{}, err
+			return BOMCreated{}, err
 		}
-		sbom.Version = versions[len(versions)-1] + 1
+		bom.Version = versions[len(versions)-1] + 1
 		ctx = log.ContextAttrs(ctx, slog.Group(
 			"service-layer",
-			slog.Int("new-version", sbom.Version),
+			slog.Int("new-version", bom.Version),
 			slog.Any("all-versions", versions),
 			slog.Bool("has-original", hasOriginal),
 		),
 		)
-		slog.DebugContext(ctx, "New version assigned to SBOM.")
+		slog.DebugContext(ctx, "New version assigned to BOM.")
 
 		meta := store.Metadata{
 			Timestamp: time.Now().UTC(),
-			Version:   fmt.Sprintf("%d", sbom.Version),
+			Version:   fmt.Sprintf("%d", bom.Version),
 		}
 
 		var modifiedBuf bytes.Buffer
 		encoder := cdx.NewBOMEncoder(&modifiedBuf, cdx.BOMFileFormatJSON)
-		if err = encoder.Encode(&sbom); err != nil {
-			return SBOMCreated{}, err
+		if err = encoder.Encode(&bom); err != nil {
+			return BOMCreated{}, err
 		}
 
-		if err := s.store.Upload(ctx, uploadKey(sbom.SerialNumber, sbom.Version), meta, modifiedBuf.Bytes()); err != nil {
-			return SBOMCreated{}, err
+		if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
+			return BOMCreated{}, err
 		}
 		slog.DebugContext(ctx, "Stored modified version")
 
 	default:
-		slog.DebugContext(ctx, "SBOM has serial number and version specified.")
-		// serial number of the SBOM is valid, version is set
+		slog.DebugContext(ctx, "BOM has serial number and version specified.")
+		// serial number of the BOM is valid, version is set
 		// let's make sure it doesn't exist already
-		exists, err := s.store.KeyExists(ctx, uploadKey(sbom.SerialNumber, sbom.Version))
+		exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
 		if err != nil {
-			return SBOMCreated{}, err
+			return BOMCreated{}, err
 		}
 		if exists {
-			return SBOMCreated{
-				SerialNumber: sbom.SerialNumber,
-				Version:      sbom.Version,
+			return BOMCreated{
+				SerialNumber: bom.SerialNumber,
+				Version:      bom.Version,
 			}, ErrAlreadyExists
 		}
 
 		meta := store.Metadata{
 			Timestamp: time.Now().UTC(),
-			Version:   fmt.Sprintf("%d", sbom.Version),
+			Version:   fmt.Sprintf("%d", bom.Version),
 		}
 
-		if err := s.store.Upload(ctx, uploadKey(sbom.SerialNumber, sbom.Version), meta, buf.Bytes()); err != nil {
-			return SBOMCreated{}, err
+		if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, buf.Bytes()); err != nil {
+			return BOMCreated{}, err
 		}
-		slog.DebugContext(ctx, "Stored original SBOM")
+		slog.DebugContext(ctx, "Stored original BOM")
 	}
 
-	return SBOMCreated{
-		SerialNumber: sbom.SerialNumber,
-		Version:      sbom.Version,
+	return BOMCreated{
+		SerialNumber: bom.SerialNumber,
+		Version:      bom.Version,
 	}, nil
 }
 
-// uploadInputChecks returns error in case SBOM fails any of the input checks,
+// uploadInputChecks returns error in case BOM fails any of the input checks,
 // nil otherwise.
-func uploadInputChecks(sbom cdx.BOM, expectedVersion string) error {
-	if sbom.BOMFormat != cdx.BOMFormat {
+func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
+	if bom.BOMFormat != cdx.BOMFormat {
 		return fmt.Errorf("required format %s", cdx.BOMFormat)
 	}
 	// if the serial number is set, it must be a valid URN conforming to RFC 4122
-	if sbom.SerialNumber != "" && !uploadValidateURN(sbom.SerialNumber) {
+	if bom.SerialNumber != "" && !uploadValidateURN(bom.SerialNumber) {
 		return fmt.Errorf("serial number not valid")
 	}
 
@@ -189,7 +189,7 @@ func uploadInputChecks(sbom cdx.BOM, expectedVersion string) error {
 	if err != nil {
 		return err
 	}
-	if sbom.SpecVersion != cdxVersion {
+	if bom.SpecVersion != cdxVersion {
 		return fmt.Errorf("required version %s", expectedVersion)
 	}
 
@@ -240,6 +240,6 @@ func knownCdxVersion(v string) (cdx.SpecVersion, error) {
 	case "1.6":
 		return cdx.SpecVersion1_6, nil
 	default:
-		return -1, fmt.Errorf("unknown cyclonedx sbom version %s", v)
+		return -1, fmt.Errorf("unknown cyclonedx bom version %s", v)
 	}
 }

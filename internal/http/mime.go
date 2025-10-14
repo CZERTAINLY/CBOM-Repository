@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const defaultSBOMVersion = "1.6"
+const defaultBOMVersion = "1.6"
 
 func CheckContentType(contentType string) (bool, string) {
 	if strings.TrimSpace(contentType) == "" {
@@ -21,7 +21,7 @@ func CheckContentType(contentType string) (bool, string) {
 	}
 	version, ok := p["version"]
 	if !ok {
-		version = defaultSBOMVersion
+		version = defaultBOMVersion
 	}
 
 	return true, version

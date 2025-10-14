@@ -7,9 +7,8 @@ import (
 func Handler(srv Server) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/v1/sbom/upload", srv.Upload)
-	mux.HandleFunc("/api/v1/sbom/{urn}", srv.GetByURN)
-	mux.HandleFunc("/api/v1/sbom", srv.Search)
+	mux.HandleFunc(RouteBOM, srv.BomHandler)
+	mux.HandleFunc(RouteBOMByURN, srv.GetByURN)
 
 	return mux
 }

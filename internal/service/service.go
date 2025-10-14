@@ -54,7 +54,7 @@ func (s *SupportedVersions) Decode(value string) error {
 }
 
 type Config struct {
-	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" required:"true"`
+	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" default:"1.6=https://raw.githubusercontent.com/CycloneDX/specification/master/schema/bom-1.6.schema.json"`
 }
 
 type Service struct {
@@ -142,7 +142,7 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 	return res, nil
 }
 
-func (s Service) GetSBOMByUrn(ctx context.Context, urn, version string) (map[string]interface{}, error) {
+func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[string]interface{}, error) {
 	ctx = log.ContextAttrs(ctx, slog.Group(
 		"service-layer",
 		slog.String("urn", urn),
@@ -150,7 +150,7 @@ func (s Service) GetSBOMByUrn(ctx context.Context, urn, version string) (map[str
 	))
 
 	if strings.TrimSpace(version) == "" {
-		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersion()` to obtain the latest SBOM version stored.")
+		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersion()` to obtain the latest BOM version stored.")
 		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, urn)
 		switch {
 		case errors.Is(err, store.ErrNotFound):
@@ -180,11 +180,11 @@ func (s Service) GetSBOMByUrn(ctx context.Context, urn, version string) (map[str
 	}
 	slog.DebugContext(ctx, "`store.GetObject()` finished.", slog.Int64("size", int64(len(b))))
 
-	var sbomMap map[string]interface{}
-	if err := json.Unmarshal(b, &sbomMap); err != nil {
+	var bomMap map[string]interface{}
+	if err := json.Unmarshal(b, &bomMap); err != nil {
 		slog.ErrorContext(ctx, "`json.Unmarshal()` failed.", slog.String("error", err.Error()))
 		return nil, err
 	}
 
-	return sbomMap, nil
+	return bomMap, nil
 }

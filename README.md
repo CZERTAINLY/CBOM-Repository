@@ -1,7 +1,7 @@
 # CBOM-Repository
 
 The CBOM Repository service acts as an object storage wrapper built on top of an S3-compatible backend.
-It provides a convenient REST API for uploading, retrieving, and searching Cryptographic Bills of Materials (SBOM) documents.
+It provides a convenient REST API for uploading, retrieving, and searching Cryptographic Bills of Materials (CBOM) documents.
 
 ## Status Work In Progress
 
