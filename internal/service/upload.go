@@ -66,7 +66,7 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		bom.Version = 1
 
 		for {
-			// generate a new urn and make sure we don't conflict with an exsiting one
+			// generate a new urn and make sure we don't conflict with an existing one
 			bom.SerialNumber = fmt.Sprintf("urn:uuid:%s", uuid.NewString())
 			exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
 			if err != nil {
