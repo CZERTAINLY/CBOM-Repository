@@ -40,3 +40,4 @@ setenv.sh
 
 artifacts
 ut_coverage.out
+coverage.out
