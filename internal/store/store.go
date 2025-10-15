@@ -253,3 +253,10 @@ func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents [
 
 	return nil
 }
+
+func (s Store) HealthCheck(ctx context.Context) error {
+	_, err := s.s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(s.cfg.Bucket),
+	})
+	return err
+}

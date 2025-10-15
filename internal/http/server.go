@@ -10,18 +10,21 @@ import (
 	"strings"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/details"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 )
 
 type Server struct {
-	service service.Service
+	service       service.Service
+	healthService health.Service
 }
 
 // TODO: abstract an interface for unit test mock
-func New(svc service.Service) Server {
+func New(svc service.Service, healthSvc health.Service) Server {
 	return Server{
-		service: svc,
+		service:       svc,
+		healthService: healthSvc,
 	}
 }
 
@@ -249,4 +252,73 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.InfoContext(ctx, "Finished.", slog.Int("response-count", len(resp)))
+}
+
+func (h Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		details.MethodNotAllowed(w,
+			fmt.Sprintf("Method %s not allowed for %s.", r.Method, r.URL.Path),
+			[]string{http.MethodGet})
+		return
+	}
+
+	healthStatus := h.healthService.CheckHealth(r.Context())
+	
+	statusCode := http.StatusOK
+	if healthStatus.Status == health.StatusDown || healthStatus.Status == health.StatusOutOfService {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(healthStatus); err != nil {
+		slog.ErrorContext(r.Context(), "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
+}
+
+func (h Server) LivenessHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		details.MethodNotAllowed(w,
+			fmt.Sprintf("Method %s not allowed for %s.", r.Method, r.URL.Path),
+			[]string{http.MethodGet})
+		return
+	}
+
+	healthStatus := h.healthService.CheckLiveness(r.Context())
+	
+	statusCode := http.StatusOK
+	if healthStatus.Status != health.StatusUp {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(healthStatus); err != nil {
+		slog.ErrorContext(r.Context(), "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
+}
+
+func (h Server) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		details.MethodNotAllowed(w,
+			fmt.Sprintf("Method %s not allowed for %s.", r.Method, r.URL.Path),
+			[]string{http.MethodGet})
+		return
+	}
+
+	healthStatus := h.healthService.CheckReadiness(r.Context())
+	
+	statusCode := http.StatusOK
+	if healthStatus.Status != health.StatusUp {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(healthStatus); err != nil {
+		slog.ErrorContext(r.Context(), "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
 }
