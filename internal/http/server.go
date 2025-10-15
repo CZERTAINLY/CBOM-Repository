@@ -254,6 +254,9 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 	slog.InfoContext(ctx, "Finished.", slog.Int("response-count", len(resp)))
 }
 
+// HealthHandler handles requests to the /api/v1/health endpoint.
+// It returns the overall health status of the service and its components.
+// Returns 200 OK if status is UP or DEGRADED, 503 Service Unavailable otherwise.
 func (h Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		details.MethodNotAllowed(w,
@@ -277,6 +280,9 @@ func (h Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// LivenessHandler handles requests to the /api/v1/health/liveness endpoint.
+// It returns the liveness status used by Kubernetes to determine if the pod should be restarted.
+// Always returns 200 OK with status UP unless the application process is in a failed state.
 func (h Server) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		details.MethodNotAllowed(w,
@@ -300,6 +306,9 @@ func (h Server) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReadinessHandler handles requests to the /api/v1/health/readiness endpoint.
+// It returns the readiness status used by Kubernetes to determine if the pod can accept traffic.
+// Returns 200 OK if all critical components are available, 503 Service Unavailable otherwise.
 func (h Server) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		details.MethodNotAllowed(w,
