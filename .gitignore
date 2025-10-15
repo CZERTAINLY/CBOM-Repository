@@ -37,3 +37,5 @@ setenv.sh
 
 /internal/server/czertainly/.openapi-generator/
 .mirrord/
+
+artifacts
