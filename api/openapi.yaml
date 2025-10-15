@@ -130,8 +130,114 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
+  /api/v1/health:
+    get:
+      summary: Get overall health status
+      operationId: getHealth
+      description: |-
+        Returns the health status of the service and its components.
+        Status codes: 200 (UP/DEGRADED), 503 (DOWN/OUT_OF_SERVICE)
+      responses:
+        '200':
+          description: Service is healthy or degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is down or out of service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/health/liveness:
+    get:
+      summary: Kubernetes liveness probe
+      operationId: getLiveness
+      description: |-
+        Returns liveness status. Used by Kubernetes to determine if the pod should be restarted.
+        Always returns UP unless the process itself is in a failed state.
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is not alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/health/readiness:
+    get:
+      summary: Kubernetes readiness probe
+      operationId: getReadiness
+      description: |-
+        Returns readiness status. Used by Kubernetes to determine if the pod can accept traffic.
+        Returns OUT_OF_SERVICE if critical components (e.g., storage) are unavailable.
+      responses:
+        '200':
+          description: Service is ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is not ready to accept traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
 components:
   schemas:
+
+    HealthResponse:
+      type: object
+      description: Health status response
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN, OUT_OF_SERVICE, UNKNOWN, DEGRADED]
+          description: Overall health status
+          example: "UP"
+        components:
+          type: object
+          description: Status of individual components
+          additionalProperties:
+            $ref: '#/components/schemas/HealthComponent'
+          example:
+            liveness:
+              status: "UP"
+            readiness:
+              status: "UP"
+            storage:
+              status: "UP"
+              details:
+                latencyMs: 45
+      required: [status, components]
+
+    HealthComponent:
+      type: object
+      description: Health status of a single component
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN, OUT_OF_SERVICE, UNKNOWN, DEGRADED]
+          description: Component health status
+          example: "UP"
+        details:
+          type: object
+          description: Additional details about the component's health
+          additionalProperties: true
+          example:
+            latencyMs: 45
+            endpoint: "https://storage.example.com"
+      required: [status]
 
     BOMEntry:
       type: object
