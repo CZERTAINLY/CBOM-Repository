@@ -3,7 +3,6 @@ package http_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,10 +16,9 @@ import (
 
 // mockChecker is a mock implementation of the health.Checker interface
 type mockChecker struct {
-	name      string
-	status    health.Status
-	details   map[string]any
-	shouldErr bool
+	name    string
+	status  health.Status
+	details map[string]any
 }
 
 func (m mockChecker) Name() string {
@@ -32,18 +30,6 @@ func (m mockChecker) Check(ctx context.Context) health.Component {
 		Status:  m.status,
 		Details: m.details,
 	}
-}
-
-// mockStorageHealthChecker is a mock implementation for storage health checks
-type mockStorageHealthChecker struct {
-	shouldFail bool
-}
-
-func (m *mockStorageHealthChecker) HealthCheck(ctx context.Context) error {
-	if m.shouldFail {
-		return errors.New("storage unavailable")
-	}
-	return nil
 }
 
 func TestHealthHandler(t *testing.T) {
