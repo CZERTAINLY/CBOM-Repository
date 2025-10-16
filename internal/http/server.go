@@ -103,7 +103,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
 		return
