@@ -11,8 +11,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-const jsonBOMSchemaV1_6 = "https://raw.githubusercontent.com/CycloneDX/specification/refs/heads/master/schema/bom-1.6.schema.json"
-
 func TestNewFunc(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -21,9 +19,7 @@ func TestNewFunc(t *testing.T) {
 
 	svc, err := service.New(
 		service.Config{
-			Versions: map[string]string{
-				"1.6": jsonBOMSchemaV1_6,
-			},
+			Versions: []string{"1.6"},
 		},
 		store.New(store.Config{Bucket: "something"}, s3Mock, s3Manager),
 	)
@@ -33,40 +29,53 @@ func TestNewFunc(t *testing.T) {
 	require.Equal(t, []string{"1.6"}, svc.SupportedVersion())
 }
 
+func TestNewFuncNoMapping(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	_, err := service.New(
+		service.Config{
+			Versions: []string{"abc"},
+		},
+		store.New(store.Config{Bucket: "something"}, s3Mock, s3Manager),
+	)
+	require.Error(t, err)
+}
+
 func TestSupportedVersionDecode(t *testing.T) {
 
 	testCases := map[string]struct {
 		input    string
 		wantErr  bool
-		expected map[string]string
+		expected []string
 	}{
 		"empty": {
 			input:   "",
 			wantErr: true,
 		},
 		"success": {
-			input:   "1.6 = https://some.url.com/schema?version=1.6, 1.7= https://uri2,k3=uri3",
-			wantErr: false,
-			expected: map[string]string{
-				"1.7": "https://uri2",
-				"k3":  "uri3",
-				"1.6": "https://some.url.com/schema?version=1.6",
-			},
+			input:    "1.6, 1.7",
+			wantErr:  false,
+			expected: []string{"1.6", "1.7"},
 		},
-		"fail missing delimiter": {
-			input:   "k1=uri1, k2= uri2,k3 uri3, k4=uri4",
+		"success-2": {
+			input:    "1.6",
+			wantErr:  false,
+			expected: []string{"1.6"},
+		},
+		"empty item is skipped": {
+			input:    ", 1.6,,1.5, ,,",
+			wantErr:  false,
+			expected: []string{"1.5", "1.6"},
+		},
+		"duplicate values": {
+			input:   ", 1.6,1.5, ,1.6, ,",
 			wantErr: true,
 		},
-		"extra comma at the end": {
-			input:   "k1=uri1, k2= uri2,k3 uri3,",
-			wantErr: true,
-		},
-		"extra comma in the middle": {
-			input:   "k1=uri1, k2=, uri2,k3 uri3,",
-			wantErr: true,
-		},
-		"duplicate key": {
-			input:   "k1=uri1,k2=uri2,k3=uri3,k1=uri4,k5=uri5",
+		"empty values only": {
+			input:   ", ,,\t , ,\t\t ,,",
 			wantErr: true,
 		},
 	}

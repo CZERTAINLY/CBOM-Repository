@@ -2,24 +2,19 @@ package service
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
-	"net/http"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	jss "github.com/kaptinlin/jsonschema"
-)
-
-const (
-	httpClientTimeout = time.Second * 30
 )
 
 var (
@@ -28,61 +23,75 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
-type SupportedVersions map[string]string
+//go:embed schemas
+var schemas embed.FS
 
-// Expected "<version-string^1>=<schema-uri^1>, <version-string^2>=<schema-uri^2>, ..."
+var versionToEmbeddedFileMapping = map[string]string{
+	"1.6": "schemas/bom-1.6.schema.json",
+}
+
+type SupportedVersions []string
+
+// Expected format "<version-string^1>, <version-string^2>, ..."
+// No duplicates allowed, at least one version has to be defined
 func (s *SupportedVersions) Decode(value string) error {
 	if strings.TrimSpace(value) == "" {
 		return errors.New("value is an empty string")
 	}
-	m := make(map[string]string)
+	v := map[string]bool{}
 	items := strings.Split(value, ",")
 
-	for _, item := range items {
-		before, after, found := strings.Cut(item, "=")
-		if !found {
-			return fmt.Errorf("invalid item: %s", item)
+	for _, cpy := range items {
+		trimmed := strings.TrimSpace(cpy)
+		if trimmed == "" {
+			continue
 		}
-		key := strings.TrimSpace(before)
-		if _, ok := m[key]; ok {
-			return fmt.Errorf("duplicate key: %s", key)
+		if _, ok := v[trimmed]; ok {
+			return errors.New("duplicate value")
 		}
-		m[key] = strings.TrimSpace(after)
+		v[trimmed] = true
 	}
-	*s = m
+	if len(v) == 0 {
+		return errors.New("there are only empty values")
+	}
+
+	*s = slices.Sorted(maps.Keys(v))
 	return nil
 }
 
 type Config struct {
-	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" default:"1.6=https://raw.githubusercontent.com/CycloneDX/specification/master/schema/bom-1.6.schema.json"`
+	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" default:"1.6"`
 }
 
 type Service struct {
 	cfg         Config
-	httpClient  *http.Client
 	store       store.Store
 	jsonSchemas map[string]*jss.Schema
 }
 
 func New(cfg Config, store store.Store) (Service, error) {
-	httpClient := &http.Client{
-		Timeout: httpClientTimeout, // safeguard if context aware method is not used for requests
-	}
 
 	jsonSchemas := make(map[string]*jss.Schema, len(cfg.Versions))
-	for version, uri := range cfg.Versions {
-		compiler := jss.NewCompiler()
-		compiler.RegisterLoader(uri, schemaLoaderFunc(httpClient, 10*time.Second))
-		schema, err := compiler.GetSchema(uri)
+	for _, version := range cfg.Versions {
+		filename, ok := versionToEmbeddedFileMapping[version]
+		if !ok {
+			return Service{}, fmt.Errorf("missing mapping of embedded file for version %q", version)
+		}
+		b, err := schemas.ReadFile(filename)
 		if err != nil {
-			return Service{}, fmt.Errorf("json schema compiler `GetSchema()` failed for URI %s: %w", uri, err)
+			return Service{}, fmt.Errorf("failed to read embedded file %s: %w", filename, err)
+		}
+
+		compiler := jss.NewCompiler()
+		schema, err := compiler.Compile(b)
+		if err != nil {
+			return Service{}, fmt.Errorf("failed to compile schema: %w", err)
 		}
 		jsonSchemas[version] = schema
 	}
 
 	return Service{
 		cfg:         cfg,
-		httpClient:  httpClient,
 		jsonSchemas: jsonSchemas,
 		store:       store,
 	}, nil

@@ -40,6 +40,7 @@ func TestStoreUpload(t *testing.T) {
 		wantErr bool
 	}{
 		"success": {
+			key: "urn:uuid:5bd5a7c5-f5f0-40db-a216-d242abba1185-1",
 			setup: func(mockCtrl *gomock.Controller, key string) store.Store {
 				s3Mock := mockS3.NewMockS3Contract(mockCtrl)
 				s3Manager := mockS3.NewMockS3Manager(mockCtrl)
@@ -58,6 +59,7 @@ func TestStoreUpload(t *testing.T) {
 			wantErr: false,
 		},
 		"put object returns error": {
+			key: "urn:uuid:5bd5a7c5-f5f0-40db-a216-d242abba1185-5",
 			setup: func(mockCtrl *gomock.Controller, key string) store.Store {
 				s3Mock := mockS3.NewMockS3Contract(mockCtrl)
 				s3Manager := mockS3.NewMockS3Manager(mockCtrl)

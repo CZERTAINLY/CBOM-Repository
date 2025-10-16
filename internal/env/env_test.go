@@ -26,7 +26,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
 				"APP_HTTP_PORT":          "8090",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 				"APP_LOG_LEVEL":          "DEBUG",
 			},
 			wantErr: false,
@@ -41,10 +41,7 @@ func TestNewFunc(t *testing.T) {
 				},
 				HttpPort: 8090,
 				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
+					Versions: []string{"1.3", "1.5", "1.6"},
 				},
 				LogLevel: slog.LevelDebug,
 			},
@@ -58,7 +55,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
 				"APP_HTTP_PORT":          "8090",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -72,10 +69,7 @@ func TestNewFunc(t *testing.T) {
 				},
 				HttpPort: 8090,
 				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
+					Versions: []string{"1.3", "1.5", "1.6"},
 				},
 				LogLevel: slog.LevelInfo,
 			},
@@ -89,7 +83,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -103,10 +97,7 @@ func TestNewFunc(t *testing.T) {
 				},
 				HttpPort: 8080,
 				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
+					Versions: []string{"1.3", "1.5", "1.6"},
 				},
 				LogLevel: slog.LevelInfo,
 			},
@@ -120,7 +111,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
 				"APP_HTTP_PORT":          "eighty",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 			},
 			wantErr: true,
 		},
@@ -132,7 +123,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "false",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -146,10 +137,7 @@ func TestNewFunc(t *testing.T) {
 				},
 				HttpPort: 8080,
 				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
+					Versions: []string{"1.3", "1.5", "1.6"},
 				},
 				LogLevel: slog.LevelInfo,
 			},
@@ -161,7 +149,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_BUCKET":          "czertainly",
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -175,10 +163,7 @@ func TestNewFunc(t *testing.T) {
 				},
 				HttpPort: 8080,
 				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
+					Versions: []string{"1.3", "1.5", "1.6"},
 				},
 				LogLevel: slog.LevelInfo,
 			},
@@ -190,7 +175,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.6, 1.5, 1.3",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -203,22 +188,44 @@ func TestNewFunc(t *testing.T) {
 				},
 				HttpPort: 8080,
 				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
+					Versions: []string{"1.3", "1.5", "1.6"},
 				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
-		"supported version decode error": {
+		"supported versions has a default value": {
+			envVars: map[string]string{
+				"APP_S3_REGION":     "eu-west-1",
+				"APP_S3_ENDPOINT":   "http://localhost:9000",
+				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_ACCESS_KEY": "minioadmin",
+				"APP_S3_SECRET_KEY": "adminpassword",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "czertainly",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				HttpPort: 8080,
+				Service: service.Config{
+					Versions: []string{"1.6"},
+				},
+				LogLevel: slog.LevelInfo,
+			},
+		},
+		"supported versions decode error (duplicate version)": {
 			envVars: map[string]string{
 				"APP_S3_REGION":          "eu-west-1",
 				"APP_S3_BUCKET":          "czertainly",
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_SUPPORTED_VERSIONS": "1.6:https://some-uri.com, 1.7:https://another-uri.com",
+				"APP_SUPPORTED_VERSIONS": "1.3, 1.6, 1.5, 1.3",
 			},
 			wantErr: true,
 		},
