@@ -3,14 +3,9 @@ package service
 import (
 	"bytes"
 	"context"
-	// "encoding/json"
-	// "errors"
 	"fmt"
 	"io"
 	"log/slog"
-	// "maps"
-	// "net/http"
-	// "slices"
 	"strings"
 	"time"
 
@@ -60,113 +55,134 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 
 	switch {
 	case bom.SerialNumber == "":
-		slog.DebugContext(ctx, "BOM does not have serial number specified - generating a new one.")
-		// serial number is missing, so we're going to generate a unique new one,
-		// that means this will be version 1, even if something else was set
-		bom.Version = 1
-
-		for {
-			// generate a new urn and make sure we don't conflict with an existing one
-			bom.SerialNumber = fmt.Sprintf("urn:uuid:%s", uuid.NewString())
-			exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
-			if err != nil {
-				return BOMCreated{}, err
-			}
-			if !exists {
-				break
-			}
-		}
-		ctx = log.ContextAttrs(ctx, slog.Group(
-			"service-layer",
-			slog.String("new-serial-number", bom.SerialNumber)),
-		)
-		slog.DebugContext(ctx, "New serial number generated.")
-
-		// store the original unchanged BOM
-		metaOriginal := store.Metadata{
-			Timestamp: time.Now().UTC(),
-			Version:   "original",
-		}
-		if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, buf.Bytes()); err != nil {
-			return BOMCreated{}, err
-		}
-		slog.DebugContext(ctx, "Stored original BOM")
-
-		// store the modified BOM with serialNumber and version set
-		meta := store.Metadata{
-			Timestamp: time.Now().UTC(),
-			Version:   fmt.Sprintf("%d", bom.Version),
-		}
-
-		var modifiedBuf bytes.Buffer
-		encoder := cdx.NewBOMEncoder(&modifiedBuf, cdx.BOMFileFormatJSON)
-		if err := encoder.Encode(&bom); err != nil {
-			slog.ErrorContext(ctx, "`cdx.Encode()` failed.", slog.String("error", err.Error()))
-			return BOMCreated{}, err
-		}
-
-		if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
-			return BOMCreated{}, err
-		}
-		slog.DebugContext(ctx, "Stored modified version")
+		return s.uploadCaseSNInvalid(ctx, bom, buf)
 
 	case bom.Version < 1:
-		slog.DebugContext(ctx, "BOM has only serial number specified - fetching the latest version")
-		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, bom.SerialNumber)
-		if err != nil {
-			return BOMCreated{}, err
-		}
-		bom.Version = versions[len(versions)-1] + 1
-		ctx = log.ContextAttrs(ctx, slog.Group(
-			"service-layer",
-			slog.Int("new-version", bom.Version),
-			slog.Any("all-versions", versions),
-			slog.Bool("has-original", hasOriginal),
-		),
-		)
-		slog.DebugContext(ctx, "New version assigned to BOM.")
-
-		meta := store.Metadata{
-			Timestamp: time.Now().UTC(),
-			Version:   fmt.Sprintf("%d", bom.Version),
-		}
-
-		var modifiedBuf bytes.Buffer
-		encoder := cdx.NewBOMEncoder(&modifiedBuf, cdx.BOMFileFormatJSON)
-		if err = encoder.Encode(&bom); err != nil {
-			return BOMCreated{}, err
-		}
-
-		if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
-			return BOMCreated{}, err
-		}
-		slog.DebugContext(ctx, "Stored modified version")
+		return s.uploadCaseSNValidVersionInvalid(ctx, bom)
 
 	default:
-		slog.DebugContext(ctx, "BOM has serial number and version specified.")
 		// serial number of the BOM is valid, version is set
-		// let's make sure it doesn't exist already
+		return s.uploadCaseSNValidVersionValid(ctx, bom, buf)
+	}
+}
+
+func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer) (BOMCreated, error) {
+	slog.DebugContext(ctx, "BOM does not have serial number specified - generating a new one.")
+	// serial number is missing, so we're going to generate a unique new one,
+	// that means this will be version 1, even if something else was set
+	bom.Version = 1
+
+	for {
+		// generate a new urn and make sure we don't conflict with an existing one
+		bom.SerialNumber = fmt.Sprintf("urn:uuid:%s", uuid.NewString())
 		exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
 		if err != nil {
 			return BOMCreated{}, err
 		}
-		if exists {
-			return BOMCreated{
-				SerialNumber: bom.SerialNumber,
-				Version:      bom.Version,
-			}, ErrAlreadyExists
+		if !exists {
+			break
 		}
-
-		meta := store.Metadata{
-			Timestamp: time.Now().UTC(),
-			Version:   fmt.Sprintf("%d", bom.Version),
-		}
-
-		if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, buf.Bytes()); err != nil {
-			return BOMCreated{}, err
-		}
-		slog.DebugContext(ctx, "Stored original BOM")
 	}
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"service-layer",
+		slog.String("new-serial-number", bom.SerialNumber)),
+	)
+	slog.DebugContext(ctx, "New serial number generated.")
+
+	// store the original unchanged BOM
+	metaOriginal := store.Metadata{
+		Timestamp: time.Now().UTC(),
+		Version:   "original",
+	}
+	if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, orig.Bytes()); err != nil {
+		return BOMCreated{}, err
+	}
+	slog.DebugContext(ctx, "Stored original BOM")
+
+	// store the modified BOM with serialNumber and version set
+	meta := store.Metadata{
+		Timestamp: time.Now().UTC(),
+		Version:   fmt.Sprintf("%d", bom.Version),
+	}
+
+	var modifiedBuf bytes.Buffer
+	encoder := cdx.NewBOMEncoder(&modifiedBuf, cdx.BOMFileFormatJSON)
+	if err := encoder.Encode(&bom); err != nil {
+		slog.ErrorContext(ctx, "`cdx.Encode()` failed.", slog.String("error", err.Error()))
+		return BOMCreated{}, err
+	}
+
+	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
+		return BOMCreated{}, err
+	}
+	slog.DebugContext(ctx, "Stored modified version")
+
+	return BOMCreated{
+		SerialNumber: bom.SerialNumber,
+		Version:      bom.Version,
+	}, nil
+}
+
+func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM) (BOMCreated, error) {
+	slog.DebugContext(ctx, "BOM has only serial number specified - fetching the latest version")
+	versions, hasOriginal, err := s.store.GetObjectVersions(ctx, bom.SerialNumber)
+	if err != nil {
+		return BOMCreated{}, err
+	}
+	bom.Version = versions[len(versions)-1] + 1
+	ctx = log.ContextAttrs(ctx, slog.Group(
+		"service-layer",
+		slog.Int("new-version", bom.Version),
+		slog.Any("all-versions", versions),
+		slog.Bool("has-original", hasOriginal),
+	),
+	)
+	slog.DebugContext(ctx, "New version assigned to BOM.")
+
+	meta := store.Metadata{
+		Timestamp: time.Now().UTC(),
+		Version:   fmt.Sprintf("%d", bom.Version),
+	}
+
+	var modifiedBuf bytes.Buffer
+	encoder := cdx.NewBOMEncoder(&modifiedBuf, cdx.BOMFileFormatJSON)
+	if err = encoder.Encode(&bom); err != nil {
+		return BOMCreated{}, err
+	}
+
+	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
+		return BOMCreated{}, err
+	}
+	slog.DebugContext(ctx, "Stored modified version")
+	return BOMCreated{
+		SerialNumber: bom.SerialNumber,
+		Version:      bom.Version,
+	}, nil
+}
+
+func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer) (BOMCreated, error) {
+	slog.DebugContext(ctx, "BOM has serial number and version specified.")
+	// let's make sure it doesn't exist already
+	exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
+	if err != nil {
+		return BOMCreated{}, err
+	}
+	if exists {
+		return BOMCreated{
+			SerialNumber: bom.SerialNumber,
+			Version:      bom.Version,
+		}, ErrAlreadyExists
+	}
+
+	meta := store.Metadata{
+		Timestamp: time.Now().UTC(),
+		Version:   fmt.Sprintf("%d", bom.Version),
+	}
+
+	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, orig.Bytes()); err != nil {
+		return BOMCreated{}, err
+	}
+	slog.DebugContext(ctx, "Stored original BOM")
 
 	return BOMCreated{
 		SerialNumber: bom.SerialNumber,

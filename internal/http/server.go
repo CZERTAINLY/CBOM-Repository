@@ -56,7 +56,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	ok, version := CheckContentType(r.Header.Get("content-type"))
 	if !ok {
 		details.UnsupportedMediaType(w,
-			fmt.Sprintf("Content type %s not allowed for %s", r.Method, r.URL.Path),
+			fmt.Sprintf("Content type %s not allowed for %s method %s", r.Header.Get("content-type"), r.URL.Path, r.Method),
 			[]string{"application/vnd.cyclonedx+json"})
 		return
 	}
@@ -106,7 +106,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
 		return

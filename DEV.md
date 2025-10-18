@@ -19,7 +19,6 @@ APP_S3_SECRET_KEY="minioadmin"
 APP_S3_REGION="eu-west-1"
 APP_S3_ENDPOINT="http://localhost:9000"
 APP_S3_BUCKET="czert"
-APP_SUPPORTED_VERSIONS="1.6=https://raw.githubusercontent.com/CycloneDX/specification/refs/heads/master/schema/bom-1.6.schema.json"
 ```
 
 then make an executable bash script:
@@ -42,14 +41,13 @@ The following environment variables are used to configure the `CBOM-Repository`:
 
 |   Environment Variable   |  Required  | Default Value | Explanation |
 | :----------------------: | :--------: | :-------------: | :-------------: |
-| APP_LOG_LEVEL            | Yes | INFO | logger level, possible values: \[ DEBUG, INFO, WARN, ERROR \] |
+| APP_LOG_LEVEL            | Yes | "INFO" | logger level, possible values: \[ DEBUG, INFO, WARN, ERROR \] |
 | APP_HTTP_PORT            | Yes | 8080 | HTTP server port |
 | APP_S3_ACCESS_KEY        | Yes | - | s3-compatible store access key |
 | APP_S3_SECRET_KEY        | Yes | - | s3-compatible store secret key |
 | APP_S3_REGION            | Yes | - | s3-compatible store Region |
 | APP_S3_ENDPOINT          | No | - | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
 | APP_S3_BUCKET            | Yes | - | bucket name |
-| APP_SUPPORTED_VERSIONS   | Yes | - | comma-separated list of supported version and schema URI's definitions, delimited by '=' character |
 | APP_S3_USE_PATH_STYLE    | Yes | true | Use s3 path style |
 
 
