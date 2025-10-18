@@ -19,7 +19,6 @@ APP_S3_SECRET_KEY="minioadmin"
 APP_S3_REGION="eu-west-1"
 APP_S3_ENDPOINT="http://localhost:9000"
 APP_S3_BUCKET="czert"
-APP_SUPPORTED_VERSIONS="1.6=https://raw.githubusercontent.com/CycloneDX/specification/refs/heads/master/schema/bom-1.6.schema.json"
 ```
 
 then make an executable bash script:
@@ -49,7 +48,6 @@ The following environment variables are used to configure the `CBOM-Repository`:
 | APP_S3_REGION            | Yes | - | s3-compatible store Region |
 | APP_S3_ENDPOINT          | No | - | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
 | APP_S3_BUCKET            | Yes | - | bucket name |
-| APP_SUPPORTED_VERSIONS   | Yes | "1.6" | comma-separated list of supported CycloneDX BOM versions; if you want to extend the the list of supported version you MUST 1) copy the file to `internal/service/schemas` directory 2) extend variable `versionToEmbeddedFileMapping` in `internal/service.go` before being able to add the version to this env. variable list |
 | APP_S3_USE_PATH_STYLE    | Yes | true | Use s3 path style |
 
 

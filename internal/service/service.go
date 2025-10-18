@@ -26,57 +26,22 @@ var (
 //go:embed schemas
 var schemas embed.FS
 
+// Please note: When you want to add a new schema version, please first
+// add the schema file into the `schemas` subdirectory in `interna/service`
+// and then extend this variable with the mapping.
 var versionToEmbeddedFileMapping = map[string]string{
 	"1.6": "schemas/bom-1.6.schema.json",
 }
 
-type SupportedVersions []string
-
-// Expected format "<version-string^1>, <version-string^2>, ..."
-// No duplicates allowed, at least one version has to be defined
-func (s *SupportedVersions) Decode(value string) error {
-	if strings.TrimSpace(value) == "" {
-		return errors.New("value is an empty string")
-	}
-	v := map[string]bool{}
-	items := strings.Split(value, ",")
-
-	for _, cpy := range items {
-		trimmed := strings.TrimSpace(cpy)
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := v[trimmed]; ok {
-			return errors.New("duplicate value")
-		}
-		v[trimmed] = true
-	}
-	if len(v) == 0 {
-		return errors.New("there are only empty values")
-	}
-
-	*s = slices.Sorted(maps.Keys(v))
-	return nil
-}
-
-type Config struct {
-	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" default:"1.6"`
-}
-
 type Service struct {
-	cfg         Config
 	store       store.Store
 	jsonSchemas map[string]*jss.Schema
 }
 
-func New(cfg Config, store store.Store) (Service, error) {
+func New(store store.Store) (Service, error) {
 
-	jsonSchemas := make(map[string]*jss.Schema, len(cfg.Versions))
-	for _, version := range cfg.Versions {
-		filename, ok := versionToEmbeddedFileMapping[version]
-		if !ok {
-			return Service{}, fmt.Errorf("missing mapping of embedded file for version %q", version)
-		}
+	jsonSchemas := make(map[string]*jss.Schema)
+	for version, filename := range versionToEmbeddedFileMapping {
 		b, err := schemas.ReadFile(filename)
 		if err != nil {
 			return Service{}, fmt.Errorf("failed to read embedded file %s: %w", filename, err)
@@ -91,7 +56,6 @@ func New(cfg Config, store store.Store) (Service, error) {
 	}
 
 	return Service{
-		cfg:         cfg,
 		jsonSchemas: jsonSchemas,
 		store:       store,
 	}, nil
