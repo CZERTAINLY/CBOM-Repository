@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
 	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
@@ -40,7 +41,12 @@ func main() {
 	}
 	slog.Debug("Service layer initialized.")
 
-	srv := internalHttp.New(svc)
+	// Initialize health service with storage checker
+	storageChecker := health.NewStorageChecker(store)
+	healthSvc := health.NewService(storageChecker)
+	slog.Debug("Health service initialized.")
+
+	srv := internalHttp.New(svc, healthSvc)
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HttpPort),
 		Handler: internalHttp.Handler(srv),
