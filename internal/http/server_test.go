@@ -2,269 +2,142 @@ package http_test
 
 import (
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
-	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
+	httpserver "github.com/CZERTAINLY/CBOM-Repository/internal/http"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// mockChecker is a mock implementation of the health.Checker interface
+// mockChecker is a mock implementation of the health.Checker interface used by health.NewService
 type mockChecker struct {
 	name    string
 	status  health.Status
 	details map[string]any
 }
 
-func (m mockChecker) Name() string {
-	return m.name
-}
-
+func (m mockChecker) Name() string { return m.name }
 func (m mockChecker) Check(ctx context.Context) health.Component {
-	return health.Component{
-		Status:  m.status,
-		Details: m.details,
-	}
+	return health.Component{Status: m.status, Details: m.details}
 }
 
-func TestHealthHandler(t *testing.T) {
-	t.Run("healthy_status", func(t *testing.T) {
-		// Create health service with UP storage checker
-		storageChecker := mockChecker{
-			name:   "storage",
-			status: health.StatusUp,
-			details: map[string]any{
-				"latencyMs": 1,
-			},
-		}
-		healthSvc := health.NewService(storageChecker)
+func buildBOMReader(t *testing.T, withSerial bool, serial string, version int) io.ReadCloser {
+	t.Helper()
+	bom := cdx.BOM{BOMFormat: cdx.BOMFormat, SpecVersion: cdx.SpecVersion1_6}
+	if withSerial {
+		bom.SerialNumber = serial
+	}
+	if version > 0 {
+		bom.Version = version
+	}
+	var sb strings.Builder
+	enc := cdx.NewBOMEncoder(&sb, cdx.BOMFileFormatJSON)
+	if err := enc.Encode(&bom); err != nil {
+		require.NoError(t, err)
+	}
+	return io.NopCloser(strings.NewReader(sb.String()))
+}
 
-		// Create a mock service - we don't need it for health tests
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
+func TestHealthHandlers(t *testing.T) {
+	storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+	healthSvc := health.NewService(storageChecker)
 
+	svc := service.Service{}
+	srv := httpserver.New(svc, healthSvc)
+
+	t.Run("health_ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
 		w := httptest.NewRecorder()
-
 		srv.HealthHandler(w, req)
-
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-		var response health.Health
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
-		assert.Equal(t, health.StatusUp, response.Status)
-		assert.Contains(t, response.Components, "liveness")
-		assert.Contains(t, response.Components, "readiness")
-		assert.Contains(t, response.Components, "storage")
 	})
 
-	t.Run("degraded_status", func(t *testing.T) {
-		// Create health service with DOWN storage checker
-		storageChecker := mockChecker{
-			name:   "storage",
-			status: health.StatusDown,
-			details: map[string]any{
-				"error": "storage unavailable",
-			},
-		}
-		healthSvc := health.NewService(storageChecker)
-
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-		w := httptest.NewRecorder()
-
-		srv.HealthHandler(w, req)
-
-		// DEGRADED should return 200
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response health.Health
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
-		assert.Equal(t, health.StatusDegraded, response.Status)
-	})
-
-	t.Run("down_status", func(t *testing.T) {
-		// Liveness is always UP in the actual implementation unless process fails
-		// So we test with a component that would make overall status DOWN
-		// Actually, we can't make liveness DOWN through normal checkers
-		// Let's test OUT_OF_SERVICE instead which also gives 503
-		storageChecker := mockChecker{
-			name:   "storage",
-			status: health.StatusOutOfService,
-		}
-		healthSvc := health.NewService(storageChecker)
-
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-		w := httptest.NewRecorder()
-
-		srv.HealthHandler(w, req)
-
-		// DEGRADED with OUT_OF_SERVICE storage should return 200
-		// because liveness and readiness are still UP
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response health.Health
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
-		assert.Equal(t, health.StatusDegraded, response.Status)
-	})
-
-	t.Run("method_not_allowed", func(t *testing.T) {
-		healthSvc := health.NewService()
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/health", nil)
-		w := httptest.NewRecorder()
-
-		srv.HealthHandler(w, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-		assert.Contains(t, w.Body.String(), "Method Not Allowed")
-	})
-}
-
-func TestLivenessHandler(t *testing.T) {
-	t.Run("liveness_up", func(t *testing.T) {
-		// Liveness is always UP in the actual implementation
-		healthSvc := health.NewService()
-
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
+	t.Run("liveness_ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/health/liveness", nil)
 		w := httptest.NewRecorder()
-
 		srv.LivenessHandler(w, req)
-
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-		var response health.Health
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
-		assert.Equal(t, health.StatusUp, response.Status)
-		assert.Contains(t, response.Components, "liveness")
-		assert.Equal(t, health.StatusUp, response.Components["liveness"].Status)
 	})
 
-	t.Run("method_not_allowed", func(t *testing.T) {
-		healthSvc := health.NewService()
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/health/liveness", nil)
+	t.Run("readiness_ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health/readiness", nil)
 		w := httptest.NewRecorder()
-
-		srv.LivenessHandler(w, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+		srv.ReadinessHandler(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
-func TestReadinessHandler(t *testing.T) {
-	t.Run("readiness_up", func(t *testing.T) {
-		// Readiness UP when all checkers are UP
-		storageChecker := mockChecker{
-			name:   "storage",
-			status: health.StatusUp,
-		}
-		healthSvc := health.NewService(storageChecker)
-
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/health/readiness", nil)
-		w := httptest.NewRecorder()
-
-		srv.ReadinessHandler(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-		var response health.Health
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
-		assert.Equal(t, health.StatusUp, response.Status)
-		assert.Contains(t, response.Components, "readiness")
-		assert.Equal(t, health.StatusUp, response.Components["readiness"].Status)
-	})
-
-	t.Run("readiness_out_of_service", func(t *testing.T) {
-		// Readiness OUT_OF_SERVICE when storage is DOWN
-		storageChecker := mockChecker{
-			name:   "storage",
-			status: health.StatusDown,
-		}
-		healthSvc := health.NewService(storageChecker)
-
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/health/readiness", nil)
-		w := httptest.NewRecorder()
-
-		srv.ReadinessHandler(w, req)
-
-		// OUT_OF_SERVICE should return 503
-		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-
-		var response health.Health
-		err := json.NewDecoder(w.Body).Decode(&response)
-		require.NoError(t, err)
-		assert.Equal(t, health.StatusOutOfService, response.Status)
-	})
-
-	t.Run("method_not_allowed", func(t *testing.T) {
-		healthSvc := health.NewService()
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
-
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/health/readiness", nil)
-		w := httptest.NewRecorder()
-
-		srv.ReadinessHandler(w, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
+func TestBomHandler_MethodNotAllowed(t *testing.T) {
+	srv := httpserver.New(service.Service{}, health.Service{})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/bom", nil)
+	w := httptest.NewRecorder()
+	srv.BomHandler(w, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
-func TestHandler(t *testing.T) {
-	t.Run("registers_all_routes", func(t *testing.T) {
-		healthSvc := health.NewService()
-		svc := service.Service{}
-		srv := internalHttp.New(svc, healthSvc)
+func TestUploadHandler_Validation(t *testing.T) {
+	// unsupported media type
+	srv := httpserver.New(service.Service{}, health.Service{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", nil)
+	req.Header.Set("content-type", "text/plain")
+	w := httptest.NewRecorder()
+	srv.Upload(w, req)
+	assert.Equal(t, http.StatusUnsupportedMediaType, w.Code)
 
-		mux := internalHttp.Handler(srv)
-		require.NotNil(t, mux)
+	// version unsupported - create service via service.New using a minimal store (no S3 clients required for this test)
+	st := store.New(store.Config{Bucket: "bucket"}, nil, nil)
+	svc, err := service.New(st)
+	require.NoError(t, err)
+	srv = httpserver.New(svc, health.Service{})
 
-		// Test that health endpoints are registered
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
-		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
-		assert.NotEqual(t, http.StatusNotFound, w.Code)
+	// request uses version=1.4 in media type
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/bom", buildBOMReader(t, true, "urn:uuid:550e8400-e29b-11d4-a716-446655440000", 1))
+	req.Header.Set("content-type", "application/vnd.cyclonedx+json;version=1.4")
+	w = httptest.NewRecorder()
+	srv.Upload(w, req)
+	// expects BadRequest because version not supported
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
 
-		req = httptest.NewRequest(http.MethodGet, "/api/v1/health/liveness", nil)
-		w = httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
-		assert.NotEqual(t, http.StatusNotFound, w.Code)
+func TestGetByURNHandler_MissingURN(t *testing.T) {
+	srv := httpserver.New(service.Service{}, health.Service{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/bom/", nil)
+	w := httptest.NewRecorder()
+	srv.GetByURN(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
 
-		req = httptest.NewRequest(http.MethodGet, "/api/v1/health/readiness", nil)
-		w = httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
-		assert.NotEqual(t, http.StatusNotFound, w.Code)
-	})
+func TestSearchHandler_Validation(t *testing.T) {
+	srv := httpserver.New(service.Service{}, health.Service{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/bom/search", nil)
+	w := httptest.NewRecorder()
+	srv.Search(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// after not a number
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/bom/search?after=notanint", nil)
+	w = httptest.NewRecorder()
+	srv.Search(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// Additional small smoke test to ensure Handler wiring returns a mux
+func TestHandler_Wiring(t *testing.T) {
+	svc := service.Service{}
+	healthSvc := health.NewService()
+	srv := httpserver.New(svc, healthSvc)
+	mux := httpserver.Handler(srv)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }

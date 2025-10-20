@@ -1,10 +1,19 @@
 package service
 
 import (
+	"context"
+	"io"
+	"strings"
 	"testing"
 
+	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
 	cdx "github.com/CycloneDX/cyclonedx-go"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 func TestUploadInputChecks(t *testing.T) {
@@ -151,4 +160,90 @@ func TestUploadValidateURN(t *testing.T) {
 			require.Equal(t, tc.want, got)
 		})
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Uploaded BOM tests (merged from upload_bom_test.go)
+// These tests exercise UploadBOM behavior using gomock for the store S3 client and manager.
+// -----------------------------------------------------------------------------
+
+func minimalBOMJSON(withSerial bool, serial string, version int, extra bool) string {
+	if extra {
+		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"extra\": \"x\"\n}"
+	}
+	if withSerial && version > 0 {
+		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": " + strings.TrimSpace(strings.Join([]string{string(rune('0' + version))}, "")) + "\n}"
+	}
+	if withSerial {
+		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\"\n}"
+	}
+	return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\"\n}"
+}
+
+func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st)
+	require.NoError(t, err)
+
+	// HeadObject returns NotFound -> no key exists
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
+	// Upload called twice
+	s3Manager.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(&manager.UploadOutput{}, nil).Times(2)
+
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(false, "", 0, false)))
+	res, err := svc.UploadBOM(context.Background(), rc, "1.6")
+	require.NoError(t, err)
+	require.NotEmpty(t, res.SerialNumber)
+	require.Equal(t, 1, res.Version)
+}
+
+func TestUploadBOM_Conflict_AlreadyExists(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st)
+	require.NoError(t, err)
+
+	serial := "urn:uuid:550e8400-e29b-11d4-a716-446655440000"
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(true, serial, 2, false)))
+
+	// HeadObject returns nil error -> exists true
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{}, nil)
+
+	res, err := svc.UploadBOM(context.Background(), rc, "1.6")
+	require.ErrorIs(t, err, ErrAlreadyExists)
+	require.Equal(t, serial, res.SerialNumber)
+	require.Equal(t, 2, res.Version)
+}
+
+func TestUploadBOM_InvalidJSONAndSchemaMismatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st)
+	require.NoError(t, err)
+
+	// invalid JSON
+	rc := io.NopCloser(strings.NewReader("{ not json }"))
+	_, err = svc.UploadBOM(context.Background(), rc, "1.6")
+	require.Error(t, err)
+
+	// schema mismatch: extra property not allowed
+	rc2 := io.NopCloser(strings.NewReader(minimalBOMJSON(false, "", 0, true)))
+	_, err = svc.UploadBOM(context.Background(), rc2, "1.6")
+	require.ErrorIs(t, err, ErrValidation)
 }
