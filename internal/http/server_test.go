@@ -138,7 +138,7 @@ func TestUploadHandler_Validation(t *testing.T) {
 	// unsupported media type
 	srv := httpserver.New(service.Service{}, health.Service{})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", nil)
-	req.Header.Set("content-type", "text/plain")
+	req.Header.Set(httpserver.HeaderContentType, "text/plain")
 	w := httptest.NewRecorder()
 	srv.Upload(w, req)
 	assert.Equal(t, http.StatusUnsupportedMediaType, w.Code)
@@ -151,7 +151,7 @@ func TestUploadHandler_Validation(t *testing.T) {
 
 	// request uses version=1.4 in media type
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/bom", buildBOMReader(t, true, "urn:uuid:550e8400-e29b-11d4-a716-446655440000", 1))
-	req.Header.Set("content-type", "application/vnd.cyclonedx+json;version=1.4")
+	req.Header.Set(httpserver.HeaderContentType, "application/vnd.cyclonedx+json;version=1.4")
 	w = httptest.NewRecorder()
 	srv.Upload(w, req)
 	// expects BadRequest because version not supported
@@ -167,7 +167,7 @@ func TestUploadHandler_ValidationFailed(t *testing.T) {
 
 	body := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"extra\": \"x\"\n}"))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", body)
-	req.Header.Set("content-type", "application/vnd.cyclonedx+json")
+	req.Header.Set(httpserver.HeaderContentType, "application/vnd.cyclonedx+json")
 	w := httptest.NewRecorder()
 	srv.Upload(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -290,7 +290,7 @@ func TestUploadHandler_SuccessCreated(t *testing.T) {
 	// minimal BOM without serial -> upload should create and return 201
 	body := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\"\n}"))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", body)
-	req.Header.Set("content-type", "application/vnd.cyclonedx+json")
+	req.Header.Set(httpserver.HeaderContentType, "application/vnd.cyclonedx+json")
 	w := httptest.NewRecorder()
 	srv.Upload(w, req)
 	resp := w.Result()
@@ -316,7 +316,7 @@ func TestUploadHandler_ConflictAlreadyExists(t *testing.T) {
 	serial := "urn:uuid:550e8400-e29b-11d4-a716-446655440000"
 	body := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": 2\n}"))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", body)
-	req.Header.Set("content-type", "application/vnd.cyclonedx+json")
+	req.Header.Set(httpserver.HeaderContentType, "application/vnd.cyclonedx+json")
 	w := httptest.NewRecorder()
 	srv.Upload(w, req)
 	resp := w.Result()
