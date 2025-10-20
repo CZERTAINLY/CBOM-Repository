@@ -2,24 +2,19 @@ package service
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
-	"net/http"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	jss "github.com/kaptinlin/jsonschema"
-)
-
-const (
-	httpClientTimeout = time.Second * 30
 )
 
 var (
@@ -28,61 +23,39 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
-type SupportedVersions map[string]string
+//go:embed schemas
+var schemas embed.FS
 
-// Expected "<version-string^1>=<schema-uri^1>, <version-string^2>=<schema-uri^2>, ..."
-func (s *SupportedVersions) Decode(value string) error {
-	if strings.TrimSpace(value) == "" {
-		return errors.New("value is an empty string")
-	}
-	m := make(map[string]string)
-	items := strings.Split(value, ",")
-
-	for _, item := range items {
-		before, after, found := strings.Cut(item, "=")
-		if !found {
-			return fmt.Errorf("invalid item: %s", item)
-		}
-		key := strings.TrimSpace(before)
-		if _, ok := m[key]; ok {
-			return fmt.Errorf("duplicate key: %s", key)
-		}
-		m[key] = strings.TrimSpace(after)
-	}
-	*s = m
-	return nil
-}
-
-type Config struct {
-	Versions SupportedVersions `envconfig:"APP_SUPPORTED_VERSIONS" default:"1.6=https://raw.githubusercontent.com/CycloneDX/specification/master/schema/bom-1.6.schema.json"`
+// Please note: When you want to add a new schema version, please first
+// add the schema file into the `schemas` subdirectory in `interna/service`
+// and then extend this variable with the mapping.
+var versionToEmbeddedFileMapping = map[string]string{
+	"1.6": "schemas/bom-1.6.schema.json",
 }
 
 type Service struct {
-	cfg         Config
-	httpClient  *http.Client
 	store       store.Store
 	jsonSchemas map[string]*jss.Schema
 }
 
-func New(cfg Config, store store.Store) (Service, error) {
-	httpClient := &http.Client{
-		Timeout: httpClientTimeout, // safeguard if context aware method is not used for requests
-	}
+func New(store store.Store) (Service, error) {
 
-	jsonSchemas := make(map[string]*jss.Schema, len(cfg.Versions))
-	for version, uri := range cfg.Versions {
-		compiler := jss.NewCompiler()
-		compiler.RegisterLoader(uri, schemaLoaderFunc(httpClient, 10*time.Second))
-		schema, err := compiler.GetSchema(uri)
+	jsonSchemas := make(map[string]*jss.Schema)
+	for version, filename := range versionToEmbeddedFileMapping {
+		b, err := schemas.ReadFile(filename)
 		if err != nil {
-			return Service{}, fmt.Errorf("json schema compiler `GetSchema()` failed for URI %s: %w", uri, err)
+			return Service{}, fmt.Errorf("failed to read embedded file %s: %w", filename, err)
+		}
+
+		compiler := jss.NewCompiler()
+		schema, err := compiler.Compile(b)
+		if err != nil {
+			return Service{}, fmt.Errorf("failed to compile schema: %w", err)
 		}
 		jsonSchemas[version] = schema
 	}
 
 	return Service{
-		cfg:         cfg,
-		httpClient:  httpClient,
 		jsonSchemas: jsonSchemas,
 		store:       store,
 	}, nil

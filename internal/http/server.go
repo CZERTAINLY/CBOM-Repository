@@ -53,10 +53,10 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Assert content type and optional version
-	ok, version := CheckContentType(r.Header.Get("content-type"))
+	ok, version := CheckContentType(r.Header.Get(HeaderContentType))
 	if !ok {
 		details.UnsupportedMediaType(w,
-			fmt.Sprintf("Content type %s not allowed for %s", r.Method, r.URL.Path),
+			fmt.Sprintf("Content type %s not allowed for %s method %s", r.Header.Get(HeaderContentType), r.URL.Path, r.Method),
 			[]string{"application/vnd.cyclonedx+json"})
 		return
 	}
@@ -72,7 +72,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 		"http-handler",
 		slog.String("path", r.URL.Path),
 		slog.String("method", r.Method),
-		slog.String("content-type", r.Header.Get("content-type")),
+		slog.String(HeaderContentType, r.Header.Get(HeaderContentType)),
 		slog.Int64("content-length", r.ContentLength),
 	))
 
@@ -106,7 +106,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
 		return
@@ -149,7 +149,7 @@ func (h Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 		"http-handler",
 		slog.String("path", r.URL.Path),
 		slog.String("method", r.Method),
-		slog.String("content-type", r.Header.Get("content-type")),
+		slog.String(HeaderContentType, r.Header.Get(HeaderContentType)),
 		slog.String("requested-urn", urn),
 		slog.String("requested-version", version),
 	))
@@ -229,7 +229,7 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 		"http-handler",
 		slog.String("path", r.URL.Path),
 		slog.String("method", r.Method),
-		slog.String("content-type", r.Header.Get("content-type")),
+		slog.String(HeaderContentType, r.Header.Get(HeaderContentType)),
 		slog.String("requested-after", after),
 	))
 
@@ -266,7 +266,7 @@ func (h Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	healthStatus := h.healthService.CheckHealth(r.Context())
-	
+
 	statusCode := http.StatusOK
 	if healthStatus.Status == health.StatusDown || healthStatus.Status == health.StatusOutOfService {
 		statusCode = http.StatusServiceUnavailable
@@ -292,7 +292,7 @@ func (h Server) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	healthStatus := h.healthService.CheckLiveness(r.Context())
-	
+
 	statusCode := http.StatusOK
 	if healthStatus.Status != health.StatusUp {
 		statusCode = http.StatusServiceUnavailable
@@ -318,7 +318,7 @@ func (h Server) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	healthStatus := h.healthService.CheckReadiness(r.Context())
-	
+
 	statusCode := http.StatusOK
 	if healthStatus.Status != health.StatusUp {
 		statusCode = http.StatusServiceUnavailable

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/stretchr/testify/require"
@@ -19,15 +18,14 @@ func TestNewFunc(t *testing.T) {
 	}{
 		"success": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_HTTP_PORT":          "8090",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
-				"APP_LOG_LEVEL":          "DEBUG",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+				"APP_HTTP_PORT":         "8090",
+				"APP_LOG_LEVEL":         "DEBUG",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -40,25 +38,18 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				HttpPort: 8090,
-				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
-				},
 				LogLevel: slog.LevelDebug,
 			},
 		},
 		"log level has default value": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_HTTP_PORT":          "8090",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+				"APP_HTTP_PORT":         "8090",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -71,25 +62,18 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				HttpPort: 8090,
-				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
-				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
 
 		"port has default value": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -102,37 +86,29 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				HttpPort: 8080,
-				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
-				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
 		"port must be a number": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_HTTP_PORT":          "eighty",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
+				"APP_HTTP_PORT":         "eighty",
 			},
 			wantErr: true,
 		},
 		"path style can be false": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "false",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_ENDPOINT":       "http://localhost:9000",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "false",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -145,23 +121,16 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: false,
 				},
 				HttpPort: 8080,
-				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
-				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
 		"path style has a default value": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_S3_REGION":     "eu-west-1",
+				"APP_S3_ENDPOINT":   "http://localhost:9000",
+				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_ACCESS_KEY": "minioadmin",
+				"APP_S3_SECRET_KEY": "adminpassword",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -174,23 +143,16 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				HttpPort: 8080,
-				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
-				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
 		"endpoint may be omitted": {
 			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_SUPPORTED_VERSIONS": "1.6=https://some-uri.com, 1.7=https://another-uri.com",
+				"APP_S3_REGION":         "eu-west-1",
+				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_ACCESS_KEY":     "minioadmin",
+				"APP_S3_SECRET_KEY":     "adminpassword",
+				"APP_S3_USE_PATH_STYLE": "true",
 			},
 			wantErr: false,
 			want: env.Config{
@@ -202,25 +164,8 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				HttpPort: 8080,
-				Service: service.Config{
-					Versions: map[string]string{
-						"1.6": "https://some-uri.com",
-						"1.7": "https://another-uri.com",
-					},
-				},
 				LogLevel: slog.LevelInfo,
 			},
-		},
-		"supported version decode error": {
-			envVars: map[string]string{
-				"APP_S3_REGION":          "eu-west-1",
-				"APP_S3_BUCKET":          "czertainly",
-				"APP_S3_ACCESS_KEY":      "minioadmin",
-				"APP_S3_SECRET_KEY":      "adminpassword",
-				"APP_S3_USE_PATH_STYLE":  "true",
-				"APP_SUPPORTED_VERSIONS": "1.6:https://some-uri.com, 1.7:https://another-uri.com",
-			},
-			wantErr: true,
 		},
 		"whitespaces-only-bucket": {
 			envVars: map[string]string{
