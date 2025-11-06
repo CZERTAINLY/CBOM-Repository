@@ -67,7 +67,6 @@ spec:
               path: /minio/health/live
               port: {{ .Values.minio.service.apiPort }}
             {{- end }}
-            # See https://www.rabbitmq.com/monitoring.html for monitoring frequency recommendations.
             initialDelaySeconds: {{ .Values.minio.image.probes.liveness.initialDelaySeconds }}
             timeoutSeconds: {{ .Values.minio.image.probes.liveness.timeoutSeconds }}
             periodSeconds: {{ .Values.minio.image.probes.liveness.periodSeconds }}
