@@ -75,7 +75,7 @@ spec:
             failureThreshold: {{ .Values.minio.image.probes.liveness.failureThreshold }}
           {{- end }}
           {{- if .Values.minio.image.probes.readiness.enabled }}
-          # probe to know when RabbitMQ is ready to accept traffic
+          # probe to know when MinIO is ready to accept traffic
           readinessProbe:
             {{- if .Values.minio.image.probes.readiness.custom }}
             {{- toYaml .Values.minio.image.probes.readiness.custom | nindent 12 }}
