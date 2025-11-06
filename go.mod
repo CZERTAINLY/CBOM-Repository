@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.11
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.3
 	github.com/google/uuid v1.6.0
-	github.com/kaptinlin/jsonschema v0.5.0
+	github.com/kaptinlin/jsonschema v0.5.2
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kodeart/go-problem/v2 v2.0.3
 	github.com/stretchr/testify v1.11.1
