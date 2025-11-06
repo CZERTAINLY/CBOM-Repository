@@ -1,0 +1,20 @@
+{{- if .Values.minio.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    {{- include "cbom-repository.labels" . | nindent 4 }}
+  name: minio-service
+spec:
+  type: {{ .Values.minio.service.type }}
+  ports:
+    - name: api
+      port: {{ .Values.minio.service.apiPort }}
+      protocol: "TCP"
+    - name: console
+      port: {{ .Values.minio.service.consolePort }}
+      protocol: "TCP"
+  selector:
+    app.kubernetes.io/component: minio
+    {{- include "cbom-repository.selectorLabels" . | nindent 4 }}
+{{- end }}

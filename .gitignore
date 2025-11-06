@@ -42,3 +42,10 @@ artifacts
 ut_coverage.out
 coverage.out
 golangci-lint-report.xml
+
+# Downloaded chart dependencies
+**/charts/*.tgz
+*.tgz
+
+# For local testing purposes
+/for-testing/

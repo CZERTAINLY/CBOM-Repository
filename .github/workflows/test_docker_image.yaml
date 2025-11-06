@@ -2,6 +2,8 @@ name: Test Docker image
 
 on:
   pull_request:
+    paths-ignore:
+      - 'deploy/charts/**'
     branches: [ main ]
   workflow_dispatch:
 

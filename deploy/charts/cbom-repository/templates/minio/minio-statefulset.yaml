@@ -1,0 +1,149 @@
+{{- if .Values.minio.enabled }}
+{{- $replicaCount := pluck "replicaCount" .Values.global .Values | compact | first }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio-statefulset
+  labels:
+    {{- include "cbom-repository.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ $replicaCount | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: minio
+      {{- include "cbom-repository.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: minio
+        {{- include "cbom-repository.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "cbom-repository.imagePullSecrets" . | indent 6 }}
+      {{- if .Values.podSecurityContext }}
+      securityContext: {{- .Values.podSecurityContext | toYaml | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: minio
+          image: {{ include "cbom-repository.minio.image" . }}
+          imagePullPolicy: {{ .Values.minio.image.pullPolicy }}
+          {{- if .Values.minio.image.command }}
+          command: {{- include "cbom-repository.minio.image.command" . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.minio.image.args }}
+          args: {{- include "cbom-repository.minio.image.args" . | nindent 12 }}
+          {{- else }}
+          args:
+            - "server"
+            - "/data"
+            - "--console-address"
+            - ":{{ .Values.minio.service.consolePort }}"
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: minio-secret
+          ports:
+            - name: api
+              containerPort: {{ .Values.minio.service.apiPort }}
+            - name: console
+              containerPort: {{ .Values.minio.service.consolePort }}
+          {{- if .Values.minio.image.securityContext }}
+          securityContext: {{- .Values.minio.image.securityContext | toYaml | nindent 12 }}
+          {{- end }}
+          {{- if .Values.minio.image.probes.liveness.enabled }}
+          livenessProbe:
+            {{- if .Values.minio.image.probes.liveness.custom }}
+            {{- toYaml .Values.minio.image.probes.liveness.custom | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /minio/health/live
+              port: {{ .Values.minio.service.apiPort }}
+            {{- end }}
+            # See https://www.rabbitmq.com/monitoring.html for monitoring frequency recommendations.
+            initialDelaySeconds: {{ .Values.minio.image.probes.liveness.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.minio.image.probes.liveness.timeoutSeconds }}
+            periodSeconds: {{ .Values.minio.image.probes.liveness.periodSeconds }}
+            successThreshold: {{ .Values.minio.image.probes.liveness.successThreshold }}
+            failureThreshold: {{ .Values.minio.image.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.minio.image.probes.readiness.enabled }}
+          # probe to know when RabbitMQ is ready to accept traffic
+          readinessProbe:
+            {{- if .Values.minio.image.probes.readiness.custom }}
+            {{- toYaml .Values.minio.image.probes.readiness.custom | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /minio/health/ready
+              port: {{ .Values.minio.service.apiPort }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.minio.image.probes.readiness.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.minio.image.probes.readiness.timeoutSeconds }}
+            periodSeconds: {{ .Values.minio.image.probes.readiness.periodSeconds }}
+            successThreshold: {{ .Values.minio.image.probes.readiness.successThreshold }}
+            failureThreshold: {{ .Values.minio.image.probes.readiness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.minio.image.probes.startup.enabled }}
+          startupProbe:
+            {{- if .Values.minio.image.probes.startup.custom }}
+            {{- toYaml .Values.minio.image.probes.startup.custom | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /minio/health/ready
+              port: {{ .Values.minio.service.apiPort }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.minio.image.probes.startup.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.minio.image.probes.startup.timeoutSeconds }}
+            periodSeconds: {{ .Values.minio.image.probes.startup.periodSeconds }}
+            successThreshold: {{ .Values.minio.image.probes.startup.successThreshold }}
+            failureThreshold: {{ .Values.minio.image.probes.startup.failureThreshold }}
+          {{- end }}
+          {{- if .Values.minio.image.resources }}
+          resources: {{- toYaml .Values.minio.image.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  {{- if not .Values.minio.persistence.enabled }}
+      volumes:
+        - name: data
+          emptyDir: {}
+  {{- else if .Values.minio.persistence.existingClaim }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            {{- with .Values.minio.persistence.existingClaim }}
+            claimName: {{ tpl . $ }}
+            {{- end }}
+  {{- else }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "cbom-repository.selectorLabels" . | nindent 10 }}
+        {{- if .Values.minio.persistence.annotations }}
+        annotations: {{- .Values.minio.persistence.annotations | toYaml | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- range .Values.minio.persistence.accessModes }}
+          - {{ . | quote }}
+          {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.minio.persistence.size | quote }}
+        {{- if .Values.minio.persistence.storageClassName }}
+        storageClassName: {{ .Values.minio.persistence.storageClassName }}
+        {{- end }}
+        {{- if .Values.minio.persistence.selector }}
+        selector: {{- .Values.minio.persistence.selector | toYaml | nindent 10 }}
+        {{- end -}}
+  {{- end }}
+{{- end }}
