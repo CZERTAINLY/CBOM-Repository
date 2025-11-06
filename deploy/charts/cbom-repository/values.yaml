@@ -274,6 +274,11 @@ minio:
       #   memory: 40M
     # limits: {}
 
+  additionalEnv:
+    variables: []
+    configMaps: []
+    secrets: []
+
   rootUser: "minioadmin"
   rootPassword: "minioadmin"
 
@@ -281,6 +286,10 @@ minio:
     type: ClusterIP
     apiPort: 9000
     consolePort: 9001
+
+  console:
+    enabled: true
+    redirectUrl: "https://czertainly.local/minio"
 
   # persistence parameters
   persistence:

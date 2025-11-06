@@ -11,9 +11,11 @@ spec:
     - name: api
       port: {{ .Values.minio.service.apiPort }}
       protocol: "TCP"
+    {{- if .Values.minio.console.enabled }}
     - name: console
       port: {{ .Values.minio.service.consolePort }}
       protocol: "TCP"
+    {{- end }}
   selector:
     app.kubernetes.io/component: minio
     {{- include "cbom-repository.selectorLabels" . | nindent 4 }}

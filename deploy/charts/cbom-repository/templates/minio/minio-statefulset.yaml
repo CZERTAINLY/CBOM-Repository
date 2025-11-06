@@ -1,5 +1,7 @@
 {{- if .Values.minio.enabled }}
 {{- $replicaCount := pluck "replicaCount" .Values.global .Values | compact | first }}
+{{- $additionalEnv := (include "cbom-repository.minio.customization.env" $) }}
+{{- $additionalEnvFrom := (include "cbom-repository.minio.customization.envFrom" $) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -44,17 +46,28 @@ spec:
           args:
             - "server"
             - "/data"
+            {{- if .Values.minio.console.enabled }}
             - "--console-address"
             - ":{{ .Values.minio.service.consolePort }}"
+            {{- end }}
+          {{- end }}
+          {{- if $additionalEnv }}
+          env:
+            {{- $additionalEnv | nindent 12 }}
           {{- end }}
           envFrom:
             - secretRef:
                 name: minio-secret
+          {{- if $additionalEnvFrom }}
+            {{- $additionalEnvFrom | nindent 12 }}
+          {{- end }}
           ports:
             - name: api
               containerPort: {{ .Values.minio.service.apiPort }}
+            {{- if .Values.minio.console.enabled }}
             - name: console
               containerPort: {{ .Values.minio.service.consolePort }}
+            {{- end }}
           {{- if .Values.minio.image.securityContext }}
           securityContext: {{- .Values.minio.image.securityContext | toYaml | nindent 12 }}
           {{- end }}

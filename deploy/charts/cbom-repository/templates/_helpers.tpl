@@ -140,6 +140,21 @@ Render customized environment variables from configmaps and secrets, if any
 {{- end -}}
 
 {{/*
+Render customized environment variables, if any
+*/}}
+{{- define "cbom-repository.minio.customization.env" -}}
+{{- include "czertainly-lib.customizations.render.yaml" ( dict "parts" (list .Values.global.additionalEnv.variables .Values.minio.additionalEnv.variables) "context" $ ) }}
+{{- end -}}
+
+{{/*
+Render customized environment variables from configmaps and secrets, if any
+*/}}
+{{- define "cbom-repository.minio.customization.envFrom" -}}
+{{- include "czertainly-lib.customizations.render.configMapEnv" ( dict "parts" (list .Values.global.additionalEnv.configMaps .Values.minio.additionalEnv.configMaps) "context" $ ) }}
+{{- include "czertainly-lib.customizations.render.secretEnv" ( dict "parts" (list .Values.global.additionalEnv.secrets .Values.minio.additionalEnv.secrets) "context" $ ) }}
+{{- end -}}
+
+{{/*
 Render customized command and arguments, if any
 */}}
 {{- define "cbom-repository.image.command" -}}
