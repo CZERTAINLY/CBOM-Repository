@@ -1,0 +1,18 @@
+{{- $additionalPorts := (include "cbom-repository.customization.ports" $) }}
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    {{- include "cbom-repository.labels" . | nindent 4 }}
+  name: cbom-repository-service
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      protocol: "TCP"
+    {{- if $additionalPorts }}
+      {{- $additionalPorts | nindent 4 }}
+    {{- end }}
+  selector:
+    app.kubernetes.io/component: cbom-repository
+    {{- include "cbom-repository.selectorLabels" . | nindent 4 }}

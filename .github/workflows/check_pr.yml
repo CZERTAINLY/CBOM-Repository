@@ -1,6 +1,8 @@
 name: Check PR
 on:
   pull_request:
+    paths-ignore:
+      - 'deploy/charts/**'
     branches: [main]
 
 permissions:

@@ -1,0 +1,224 @@
+{{- $replicaCount := pluck "replicaCount" .Values.global .Values | compact | first }}
+{{- $httpProxy := pluck "httpProxy" .Values.global .Values | compact | first }}
+{{- $httpsProxy := pluck "httpsProxy" .Values.global .Values | compact | first }}
+{{- $noProxy := pluck "noProxy" .Values.global .Values | compact | first }}
+{{- $additionalInitContainers := (include "cbom-repository.customization.initContainers" $) }}
+{{- $additionalSidecarContainers := (include "cbom-repository.customization.sidecarContainers" $) }}
+{{- $additionalVolumes := (include "cbom-repository.customization.volumes" $) }}
+{{- $additionalVolumeMounts := (include "cbom-repository.customization.volumeMounts" $) }}
+{{- $additionalEnv := (include "cbom-repository.customization.env" $) }}
+{{- $additionalEnvFrom := (include "cbom-repository.customization.envFrom" $) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cbom-repository-deployment
+  labels:
+    {{- include "cbom-repository.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ $replicaCount | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: cbom-repository
+      {{- include "cbom-repository.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: cbom-repository
+        {{- include "cbom-repository.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "cbom-repository.imagePullSecrets" . | indent 6 }}
+      {{- if .Values.podSecurityContext }}
+      securityContext: {{- .Values.podSecurityContext | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.minio.enabled $additionalInitContainers }}
+      initContainers:
+        {{- if .Values.minio.enabled }}
+        - name: create-bucket
+          image: {{ include "cbom-repository.minio.image" . }}
+          env:
+            - name: APP_S3_ENDPOINT
+              value: {{ .Values.cbomRepo.endpoint | quote }}
+            - name: APP_S3_BUCKET
+              value: {{ .Values.cbomRepo.bucket | quote }}
+            - name: APP_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cbom-repository-secret
+                  key: access_key
+            - name: APP_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cbom-repository-secret
+                  key: secret_key
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              echo "Waiting for MinIO to be ready at ${APP_S3_ENDPOINT}..."
+              until mc alias set minio "${APP_S3_ENDPOINT}" "${APP_S3_ACCESS_KEY}" "${APP_S3_SECRET_KEY}" >/dev/null 2>&1; do
+                echo "MinIO not ready, retrying in 5 seconds..."
+                sleep 5
+              done
+
+              echo "MinIO is ready, verifying bucket..."
+              if mc ls minio/${APP_S3_BUCKET} >/dev/null 2>&1; then
+                echo "Bucket ${APP_S3_BUCKET} already exists."
+              else
+                echo "Bucket ${APP_S3_BUCKET} not found, creating..."
+                mc mb minio/${APP_S3_BUCKET}
+              fi
+
+              echo "Bucket check complete."
+        {{- end }}
+        {{- if $additionalInitContainers }}
+        {{- $additionalInitContainers | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: cbom-repository
+          image: {{ include "cbom-repository.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.image.command }}
+          command: {{- include "cbom-repository.image.command" . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.image.args }}
+          args: {{- include "cbom-repository.image.args" . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: APP_S3_ENDPOINT
+              value: {{ .Values.cbomRepo.endpoint | quote }}
+            - name: APP_S3_REGION
+              value: {{ .Values.cbomRepo.region | quote }}
+            - name: APP_S3_BUCKET
+              value: {{ .Values.cbomRepo.bucket | quote }}
+            - name: APP_S3_USE_PATH_STYLE
+              value: {{ .Values.cbomRepo.usePathStyle | quote }}
+            - name: APP_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cbom-repository-secret
+                  key: access_key
+            - name: APP_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cbom-repository-secret
+                  key: secret_key
+            - name: APP_HTTP_PORT
+              value: {{ .Values.service.port | quote }}
+            - name: APP_LOG_LEVEL
+              value: {{ .Values.logging.level | quote }}
+            {{- if $httpProxy }}
+            - name: HTTP_PROXY
+              value: {{ $httpProxy }}
+            {{- end }}
+            {{- if $httpsProxy }}
+            - name: HTTPS_PROXY
+              value: {{ $httpsProxy }}
+            {{- end }}
+            {{- if $noProxy }}
+            - name: NO_PROXY
+              value: {{ $noProxy }}
+            {{- end }}
+            {{- if $additionalEnv }}
+              {{- $additionalEnv | nindent 12 }}
+            {{- end }}
+          {{- if $additionalEnvFrom }}
+          envFrom:
+            {{- $additionalEnvFrom | indent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          {{- if .Values.image.securityContext }}
+          securityContext: {{- .Values.image.securityContext | toYaml | nindent 12 }}
+          {{- end }}
+          {{- if .Values.image.probes.liveness.enabled }}
+          livenessProbe:
+            {{- if .Values.image.probes.liveness.custom }}
+            {{- toYaml .Values.image.probes.liveness.custom | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /api/v1/health/liveness
+              port: {{ .Values.service.port }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.image.probes.liveness.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.image.probes.liveness.timeoutSeconds }}
+            periodSeconds: {{ .Values.image.probes.liveness.periodSeconds }}
+            successThreshold: {{ .Values.image.probes.liveness.successThreshold }}
+            failureThreshold: {{ .Values.image.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.image.probes.readiness.enabled }}
+          readinessProbe:
+            {{- if .Values.image.probes.readiness.custom }}
+            {{- toYaml .Values.image.probes.readiness.custom | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /api/v1/health/readiness
+              port: {{ .Values.service.port }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.image.probes.readiness.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.image.probes.readiness.timeoutSeconds }}
+            periodSeconds: {{ .Values.image.probes.readiness.periodSeconds }}
+            successThreshold: {{ .Values.image.probes.readiness.successThreshold }}
+            failureThreshold: {{ .Values.image.probes.readiness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.image.probes.startup.enabled }}
+          startupProbe:
+            {{- if .Values.image.probes.startup.custom }}
+            {{- toYaml .Values.image.probes.startup.custom | nindent 12 }}
+            {{- else }}
+            httpGet:
+              path: /api/v1/health
+              port: {{ .Values.service.port }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.image.probes.startup.initialDelaySeconds }}
+            timeoutSeconds: {{ .Values.image.probes.startup.timeoutSeconds }}
+            periodSeconds: {{ .Values.image.probes.startup.periodSeconds }}
+            successThreshold: {{ .Values.image.probes.startup.successThreshold }}
+            failureThreshold: {{ .Values.image.probes.startup.failureThreshold }}
+          {{- end }}
+          {{- if .Values.image.resources }}
+          resources: {{- toYaml .Values.image.resources | nindent 12 }}
+          {{- end }}
+          {{- if or .Values.global.trusted.certificates .Values.trusted.certificates $additionalVolumeMounts }}
+          volumeMounts:
+            {{- if or .Values.global.trusted.certificates .Values.trusted.certificates }}
+            - name: trusted-certificates-volume
+              mountPath: /etc/ssl/certs/ca.crt
+              subPath: ca.crt
+              readOnly: true
+            {{- end }}
+            {{- if $additionalVolumeMounts }}
+              {{- $additionalVolumeMounts | nindent 12 }}
+            {{- end }}
+          {{- end }}
+        {{- if $additionalSidecarContainers }}
+          {{- $additionalSidecarContainers | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.global.trusted.certificates .Values.trusted.certificates $additionalVolumes }}
+      volumes:
+        {{- if .Values.global.trusted.certificates }}
+        - name: trusted-certificates-volume
+          secret:
+            defaultMode: 420
+            secretName: trusted-certificates
+        {{- else if .Values.trusted.certificates }}
+        - name: trusted-certificates-volume
+          secret:
+            defaultMode: 420
+            secretName: trusted-certificates-{{ .Chart.Name | lower }}
+        {{- end }}
+        {{- if $additionalVolumes }}
+          {{- $additionalVolumes | nindent 8 }}
+        {{- end }}
+      {{- end }}
