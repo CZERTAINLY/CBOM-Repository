@@ -30,7 +30,7 @@ Copy the default `values.yaml` from the Helm chart and modify the values accordi
 ```bash
 helm show values oci://harbor.3key.company/czertainly-helm/cbom-repository > values.yaml
 ```
-Now edit the `values.yaml` according to your desired stated, see [Configurable parameters](#configurable-parameters) for more information.
+Now edit the `values.yaml` according to your desired state, see [Configurable parameters](#configurable-parameters) for more information.
 
 **Install**
 
