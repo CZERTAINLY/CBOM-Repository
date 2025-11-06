@@ -9,6 +9,8 @@ on:
 jobs:
   check:
     name: Check
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
 
     steps:
