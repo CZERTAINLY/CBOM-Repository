@@ -272,7 +272,7 @@ minio:
       # requests:
       #   cpu: 30m
       #   memory: 40M
-    # limits: {}
+      # limits: {}
 
   additionalEnv:
     variables: []
