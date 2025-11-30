@@ -1,0 +1,654 @@
+package http
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+)
+
+func TestHealthHandlersStatusUp(t *testing.T) {
+	storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+	healthSvc := health.NewService(storageChecker)
+
+	svc := service.Service{}
+	srv := New(Config{Prefix: "api"}, svc, healthSvc)
+
+	t.Run("health_ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+		w := httptest.NewRecorder()
+		srv.HealthHandler(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	})
+
+	t.Run("liveness_ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health/liveness", nil)
+		w := httptest.NewRecorder()
+		srv.LivenessHandler(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("readiness_ok", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health/readiness", nil)
+		w := httptest.NewRecorder()
+		srv.ReadinessHandler(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestHealthHandler_OverrideReadiness(t *testing.T) {
+	// Override readiness to OutOfService to force 503
+	healthSvc := health.NewService(mockChecker{name: "readiness", status: health.StatusOutOfService})
+	srv := New(Config{Prefix: "api"}, service.Service{}, healthSvc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	w := httptest.NewRecorder()
+	srv.HealthHandler(w, req)
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+}
+
+func TestHealthHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		healthStatus   health.Status
+		expectedStatus int
+	}{
+		{
+			name:           "health status UP",
+			healthStatus:   health.StatusUp,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "health status DEGRADED",
+			healthStatus:   health.StatusDegraded,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "health status DOWN",
+			healthStatus:   health.StatusDown,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "health status OUT_OF_SERVICE",
+			healthStatus:   health.StatusOutOfService,
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checker := mockChecker{name: "storage", status: tt.healthStatus, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(checker)
+
+			cfg := Config{Port: 8080, Prefix: "/api"}
+			server := New(cfg, service.Service{}, healthSvc)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+			w := httptest.NewRecorder()
+
+			server.HealthHandler(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+			var response health.Health
+			err := json.NewDecoder(w.Body).Decode(&response)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestLivenessHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		healthStatus   health.Status
+		expectedStatus int
+	}{
+		{
+			name:           "liveness UP",
+			healthStatus:   health.StatusUp,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "liveness DOWN",
+			healthStatus:   health.StatusDown,
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checker := mockChecker{name: "storage", status: tt.healthStatus, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(checker)
+
+			cfg := Config{Port: 8080, Prefix: "/api"}
+			server := New(cfg, service.Service{}, healthSvc)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/health/liveness", nil)
+			w := httptest.NewRecorder()
+
+			server.LivenessHandler(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+			var response health.Health
+			err := json.NewDecoder(w.Body).Decode(&response)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestReadinessHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		healthStatus   health.Status
+		expectedStatus int
+	}{
+		{
+			name:           "readiness UP",
+			healthStatus:   health.StatusUp,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "readiness DOWN",
+			healthStatus:   health.StatusDown,
+			expectedStatus: http.StatusServiceUnavailable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checker := mockChecker{name: "storage", status: tt.healthStatus, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(checker)
+
+			cfg := Config{Port: 8080, Prefix: "/api"}
+			server := New(cfg, service.Service{}, healthSvc)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/health/readiness", nil)
+			w := httptest.NewRecorder()
+
+			server.ReadinessHandler(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+			var response health.Health
+			err := json.NewDecoder(w.Body).Decode(&response)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestHttpInfoContext(t *testing.T) {
+	nextCalled := false
+	expectedMethod := http.MethodGet
+	expectedPath := "/test/path"
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		require.NotNil(t, r.Context())
+	})
+
+	middleware := httpInfoContext(next)
+
+	req := httptest.NewRequest(expectedMethod, expectedPath, nil)
+	w := httptest.NewRecorder()
+
+	middleware.ServeHTTP(w, req)
+
+	require.True(t, nextCalled)
+}
+
+func TestUpload(t *testing.T) {
+	validBOM := `{
+		"bomFormat": "CycloneDX",
+		"specVersion": "1.6",
+		"serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+		"version": 1,
+		"metadata": {
+			"timestamp": "2023-01-01T00:00:00Z"
+		}
+	}`
+
+	tests := []struct {
+		name               string
+		contentType        string
+		body               string
+		setupMocks         func(*mockS3.MockS3Contract, *mockS3.MockS3Manager)
+		expectedStatus     int
+		expectedInResponse string
+	}{
+		{
+			name:           "unsupported content type",
+			contentType:    "application/json",
+			body:           validBOM,
+			setupMocks:     func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {},
+			expectedStatus: http.StatusUnsupportedMediaType,
+		},
+		{
+			name:           "unsupported version",
+			contentType:    "application/vnd.cyclonedx+json; version=1.5",
+			body:           validBOM,
+			setupMocks:     func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:        "successful upload",
+			contentType: "application/vnd.cyclonedx+json; version=1.6",
+			body:        validBOM,
+			setupMocks: func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {
+				s3c.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(nil, &types.NotFound{})
+				s3m.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(nil, nil)
+			},
+			expectedStatus:     http.StatusCreated,
+			expectedInResponse: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+		},
+		{
+			name:        "conflict - BOM already exists",
+			contentType: "application/vnd.cyclonedx+json; version=1.6",
+			body:        validBOM,
+			setupMocks: func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {
+				s3c.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{}, nil)
+			},
+			expectedStatus: http.StatusConflict,
+		},
+		{
+			name:           "invalid BOM format",
+			contentType:    "application/vnd.cyclonedx+json; version=1.6",
+			body:           `{"invalid": "json"}`,
+			setupMocks:     func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			s3Manager := mockS3.NewMockS3Manager(ctrl)
+			tt.setupMocks(s3Mock, s3Manager)
+
+			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+			svc, err := service.New(st)
+			require.NoError(t, err)
+
+			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(storageChecker)
+
+			cfg := Config{Port: 8080, Prefix: "/api"}
+			server := New(cfg, svc, healthSvc)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", strings.NewReader(tt.body))
+			req.Header.Set(HeaderContentType, tt.contentType)
+			w := httptest.NewRecorder()
+
+			server.Upload(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedInResponse != "" {
+				bodyStr := w.Body.String()
+				require.Contains(t, bodyStr, tt.expectedInResponse)
+			}
+		})
+	}
+}
+
+func TestGetByURN(t *testing.T) {
+	validURN := "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+	invalidURN := "invalid-urn"
+
+	validBOM := map[string]interface{}{
+		"bomFormat":    "CycloneDX",
+		"specVersion":  "1.6",
+		"serialNumber": validURN,
+		"version":      1,
+	}
+
+	tests := []struct {
+		name           string
+		urn            string
+		version        string
+		setupMocks     func(*mockS3.MockS3Contract)
+		expectedStatus int
+		prefix         string
+	}{
+		{
+			name:           "missing URN parameter",
+			urn:            "",
+			setupMocks:     func(s3c *mockS3.MockS3Contract) {},
+			expectedStatus: http.StatusBadRequest,
+			prefix:         "/api",
+		},
+		{
+			name:           "invalid URN format",
+			urn:            invalidURN,
+			setupMocks:     func(s3c *mockS3.MockS3Contract) {},
+			expectedStatus: http.StatusBadRequest,
+			prefix:         "/api",
+		},
+		{
+			name:    "BOM not found",
+			urn:     validURN,
+			version: "1",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				s3c.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, &types.NoSuchKey{})
+			},
+			expectedStatus: http.StatusNotFound,
+			prefix:         "/api",
+		},
+		{
+			name:    "successful retrieval with version",
+			urn:     validURN,
+			version: "1",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				bomJSON, _ := json.Marshal(validBOM)
+				s3c.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+					Body: io.NopCloser(bytes.NewReader(bomJSON)),
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			prefix:         "/api",
+		},
+		{
+			name:    "successful retrieval without version - custom prefix",
+			urn:     validURN,
+			version: "",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				s3c.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String(validURN + "-1")},
+						{Key: aws.String(validURN + "-2")},
+					},
+				}, nil)
+				bomJSON, _ := json.Marshal(validBOM)
+				s3c.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+					Body: io.NopCloser(bytes.NewReader(bomJSON)),
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			prefix:         "/v2",
+		},
+		{
+			name:    "internal error",
+			urn:     validURN,
+			version: "1",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				s3c.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errors.New("internal error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			prefix:         "/api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			tt.setupMocks(s3Mock)
+
+			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+			svc, err := service.New(st)
+			require.NoError(t, err)
+
+			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(storageChecker)
+
+			cfg := Config{Port: 8080, Prefix: tt.prefix}
+			server := New(cfg, svc, healthSvc)
+
+			url := fmt.Sprintf("%s/v1/bom/%s", tt.prefix, tt.urn)
+			if tt.version != "" {
+				url += fmt.Sprintf("?version=%s", tt.version)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			req = mux.SetURLVars(req, map[string]string{"urn": tt.urn})
+			w := httptest.NewRecorder()
+
+			server.GetByURN(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				require.Equal(t, "application/vnd.cyclonedx+json", w.Header().Get("Content-Type"))
+			}
+		})
+	}
+}
+
+func TestSearch(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name           string
+		after          string
+		setupMocks     func(*mockS3.MockS3Contract)
+		expectedStatus int
+		prefix         string
+	}{
+		{
+			name:           "missing after parameter",
+			after:          "",
+			setupMocks:     func(s3c *mockS3.MockS3Contract) {},
+			expectedStatus: http.StatusBadRequest,
+			prefix:         "/api",
+		},
+		{
+			name:           "invalid after parameter - not a number",
+			after:          "invalid",
+			setupMocks:     func(s3c *mockS3.MockS3Contract) {},
+			expectedStatus: http.StatusBadRequest,
+			prefix:         "/api",
+		},
+		{
+			name:           "invalid after parameter - negative number",
+			after:          "-1",
+			setupMocks:     func(s3c *mockS3.MockS3Contract) {},
+			expectedStatus: http.StatusBadRequest,
+			prefix:         "/api",
+		},
+		{
+			name:  "successful search",
+			after: "1672531200",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				s3c.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("urn:uuid:1-1"), LastModified: &now},
+						{Key: aws.String("urn:uuid:2-2"), LastModified: &now},
+					},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			prefix:         "/api",
+		},
+		{
+			name:  "successful search - empty prefix",
+			after: "1672531200",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				s3c.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			prefix:         "",
+		},
+		{
+			name:  "internal error",
+			after: "1672531200",
+			setupMocks: func(s3c *mockS3.MockS3Contract) {
+				s3c.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("internal error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+			prefix:         "/custom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			tt.setupMocks(s3Mock)
+
+			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+			svc, err := service.New(st)
+			require.NoError(t, err)
+
+			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(storageChecker)
+
+			cfg := Config{Port: 8080, Prefix: tt.prefix}
+			server := New(cfg, svc, healthSvc)
+
+			url := fmt.Sprintf("%s/v1/bom", tt.prefix)
+			if tt.after != "" {
+				url += fmt.Sprintf("?after=%s", tt.after)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			w := httptest.NewRecorder()
+
+			server.Search(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				require.Equal(t, "application/json", w.Header().Get("Content-Type"))
+				var response []service.SearchRes
+				err := json.NewDecoder(w.Body).Decode(&response)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestNotFoundHandler(t *testing.T) {
+	tests := []struct {
+		name   string
+		path   string
+		method string
+		prefix string
+	}{
+		{
+			name:   "not found with default prefix",
+			path:   "/api/v1/invalid",
+			method: http.MethodGet,
+			prefix: "/api",
+		},
+		{
+			name:   "not found with custom prefix",
+			path:   "/custom/v1/invalid",
+			method: http.MethodPost,
+			prefix: "/custom",
+		},
+		{
+			name:   "not found with empty prefix",
+			path:   "/v1/invalid",
+			method: http.MethodDelete,
+			prefix: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(storageChecker)
+
+			cfg := Config{Port: 8080, Prefix: tt.prefix}
+			server := New(cfg, service.Service{}, healthSvc)
+
+			router := server.Handler()
+
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusNotFound, w.Code)
+			bodyStr := w.Body.String()
+			require.Contains(t, bodyStr, "There is no handler registered")
+		})
+	}
+}
+
+func TestIntegration_FullRouterWithPrefixes(t *testing.T) {
+	tests := []struct {
+		name   string
+		prefix string
+	}{
+		{
+			name:   "default prefix",
+			prefix: "/api",
+		},
+		{
+			name:   "custom prefix v1",
+			prefix: "/v1",
+		},
+		{
+			name:   "custom prefix service",
+			prefix: "/service",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+			svc, err := service.New(st)
+			require.NoError(t, err)
+
+			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+			healthSvc := health.NewService(storageChecker)
+
+			cfg := Config{Port: 8080, Prefix: tt.prefix}
+			server := New(cfg, svc, healthSvc)
+
+			router := server.Handler()
+
+			// Test health endpoint
+			req := httptest.NewRequest(http.MethodGet, tt.prefix+"/v1/health", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, http.StatusOK, w.Code)
+
+			// Test liveness endpoint
+			req = httptest.NewRequest(http.MethodGet, tt.prefix+"/v1/health/liveness", nil)
+			w = httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, http.StatusOK, w.Code)
+
+			// Test readiness endpoint
+			req = httptest.NewRequest(http.MethodGet, tt.prefix+"/v1/health/readiness", nil)
+			w = httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}

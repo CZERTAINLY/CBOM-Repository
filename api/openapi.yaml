@@ -20,7 +20,7 @@ externalDocs:
   url: https://docs.czertainly.com
 
 paths:
-  /api/v1/bom:
+  /v1/bom:
     post:
       summary: Upload a BOM
       operationId: uploadBOM
@@ -73,7 +73,7 @@ paths:
           description: Unix timestamp
           required: true
           schema:
-            type: int
+            type: integer
       responses:
         "200":
           description: Array of BOM entries (serialNumber + version)
@@ -90,7 +90,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
-  /api/v1/bom/{urn}:
+  /v1/bom/{urn}:
     get:
       summary: Retrieve a BOM by URN
       operationId: getBOMByUrn
@@ -111,8 +111,11 @@ paths:
             example: 1
       responses:
         '200':
-          description: Requested BOM
+          description: Requested BOM with statistics
           content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BOMResponse'
             application/vnd.cyclonedx+json:
               schema:
                 type: string
@@ -130,7 +133,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
 
-  /api/v1/health:
+  /v1/health:
     get:
       summary: Get overall health status
       operationId: getHealth
@@ -151,7 +154,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
-  /api/v1/health/liveness:
+  /v1/health/liveness:
     get:
       summary: Kubernetes liveness probe
       operationId: getLiveness
@@ -172,7 +175,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
-  /api/v1/health/readiness:
+  /v1/health/readiness:
     get:
       summary: Kubernetes readiness probe
       operationId: getReadiness
@@ -299,6 +302,109 @@ components:
           description: A URI reference that identifies the specific occurrence of the problem.
           example: "urn:uuid:4b96f3f7-0c2a-43f7-9c0a-7b0b6a3e2a61"
       additionalProperties: true
+
+    BOMResponse:
+      type: object
+      description: Response containing BOM metadata and statistics
+      properties:
+        serialNumber:
+          type: string
+          description: CycloneDX serial number (URN, RFC-4122)
+          example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+        version:
+          type: integer
+          description: CycloneDX integer version number for the BOM document
+          example: 2
+        stats:
+          $ref: '#/components/schemas/BOMStats'
+      required: [serialNumber, version, stats]
+
+    BOMStats:
+      type: object
+      description: Statistical information about the BOM
+      properties:
+        cryptoStats:
+          $ref: '#/components/schemas/CryptoStats'
+      required: [cryptoStats]
+
+    CryptoStats:
+      type: object
+      description: Cryptographic statistics
+      properties:
+        assets:
+          $ref: '#/components/schemas/CryptoAssets'
+        algorithms:
+          $ref: '#/components/schemas/AlgorithmStats'
+      required: [assets, algorithms]
+
+    CryptoAssets:
+      type: object
+      description: Cryptographic assets breakdown
+      properties:
+        total:
+          type: integer
+          example: 0
+        certificates:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 0
+          required: [total]
+        keys:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 0
+            symmetric:
+              type: integer
+              example: 0
+            asymmetric:
+              type: integer
+              example: 0
+          required: [total, symmetric, asymmetric]
+        hashFunctions:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 0
+          required: [total]
+        signatureSchemes:
+          type: object
+          properties:
+            signatureSchemes:
+              type: integer
+              example: 0
+          required: [signatureSchemes]
+        keyAgreement:
+          type: object
+          properties:
+            keyAgreements:
+              type: integer
+              example: 0
+          required: [keyAgreements]
+      required: [total, certificates, keys, hashFunctions, signatureSchemes, keyAgreement]
+
+    AlgorithmStats:
+      type: object
+      description: Algorithm usage statistics
+      properties:
+        unique:
+          type: array
+          items:
+            type: string
+          example: ["AES"]
+        keySizes:
+          type: array
+          items:
+            type: integer
+          example: [128]
+        count:
+          type: integer
+          example: 1
+      required: [unique, keySizes, count]
 
 
 

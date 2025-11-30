@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/http"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ func TestNewFunc(t *testing.T) {
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "true",
 				"APP_HTTP_PORT":         "8090",
+				"APP_HTTP_PREFIX":       "/cbom/repo",
 				"APP_LOG_LEVEL":         "DEBUG",
 			},
 			wantErr: false,
@@ -37,36 +39,14 @@ func TestNewFunc(t *testing.T) {
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
 				},
-				HttpPort: 8090,
+				Http: http.Config{
+					Port:   8090,
+					Prefix: "/cbom/repo",
+				},
 				LogLevel: slog.LevelDebug,
 			},
 		},
-		"log level has default value": {
-			envVars: map[string]string{
-				"APP_S3_REGION":         "eu-west-1",
-				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
-				"APP_S3_ACCESS_KEY":     "minioadmin",
-				"APP_S3_SECRET_KEY":     "adminpassword",
-				"APP_S3_USE_PATH_STYLE": "true",
-				"APP_HTTP_PORT":         "8090",
-			},
-			wantErr: false,
-			want: env.Config{
-				Store: store.Config{
-					Region:       "eu-west-1",
-					Endpoint:     "http://localhost:9000",
-					Bucket:       "czertainly",
-					AccessKey:    "minioadmin",
-					SecretKey:    "adminpassword",
-					UsePathStyle: true,
-				},
-				HttpPort: 8090,
-				LogLevel: slog.LevelInfo,
-			},
-		},
-
-		"port has default value": {
+		"log level, port and prefix have default value": {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
@@ -85,7 +65,10 @@ func TestNewFunc(t *testing.T) {
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
 				},
-				HttpPort: 8080,
+				Http: http.Config{
+					Port:   8080,
+					Prefix: "/api",
+				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
@@ -120,7 +103,10 @@ func TestNewFunc(t *testing.T) {
 					SecretKey:    "adminpassword",
 					UsePathStyle: false,
 				},
-				HttpPort: 8080,
+				Http: http.Config{
+					Port:   8080,
+					Prefix: "/api",
+				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
@@ -142,7 +128,10 @@ func TestNewFunc(t *testing.T) {
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
 				},
-				HttpPort: 8080,
+				Http: http.Config{
+					Port:   8080,
+					Prefix: "/api",
+				},
 				LogLevel: slog.LevelInfo,
 			},
 		},
@@ -163,7 +152,10 @@ func TestNewFunc(t *testing.T) {
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
 				},
-				HttpPort: 8080,
+				Http: http.Config{
+					Port:   8080,
+					Prefix: "/api",
+				},
 				LogLevel: slog.LevelInfo,
 			},
 		},

@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -28,6 +26,7 @@ const (
 	MetaTimestampKey   = "timestamp"
 	MetaContentTypeKey = "content-type"
 	MetaVersionKey     = "version"
+	MetaStatsKey       = "stats"
 )
 
 type S3Contract interface {
@@ -60,12 +59,14 @@ type Store struct {
 type Metadata struct {
 	Timestamp time.Time
 	Version   string
+	Stats     string
 }
 
 func (m Metadata) Map() map[string]string {
 	return map[string]string{
 		MetaTimestampKey: fmt.Sprintf("%d", m.Timestamp.Unix()),
 		MetaVersionKey:   m.Version,
+		MetaStatsKey:     m.Stats,
 	}
 }
 
@@ -80,11 +81,6 @@ func New(cfg Config, s3Client S3Contract, s3Manager S3Manager) Store {
 }
 
 func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"store-layer",
-		slog.Int64("timestamp", ts),
-		slog.String("method", "Search"),
-	))
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.Bucket),
 	}
@@ -111,11 +107,6 @@ func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
 }
 
 func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, bool, error) {
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"store-layer",
-		slog.String("urn", urn),
-		slog.String("method", "GetObjectVersions"),
-	))
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.Bucket),
 		Prefix: aws.String(urn),
@@ -170,11 +161,6 @@ func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, bool, 
 }
 
 func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"store-layer",
-		slog.String("key", key),
-		slog.String("method", "GetObject"),
-	))
 	result, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
 		Key:    aws.String(key),
@@ -206,11 +192,6 @@ func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"store-layer",
-		slog.String("key", key),
-		slog.String("method", "KeyExists"),
-	))
 	_, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
 		Key:    aws.String(key),
@@ -230,13 +211,6 @@ func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
 }
 
 func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents []byte) error {
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"store-layer",
-		slog.String("key", key),
-		slog.Int64("size", int64(len(contents))),
-		slog.Any("metadata", meta),
-		slog.String("method", "Upload"),
-	))
 	input := &s3.PutObjectInput{
 		Bucket:            aws.String(s.cfg.Bucket),
 		Key:               aws.String(key),
