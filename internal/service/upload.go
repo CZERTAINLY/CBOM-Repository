@@ -3,10 +3,11 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
@@ -17,8 +18,9 @@ import (
 )
 
 type BOMCreated struct {
-	SerialNumber string `json:"serialNumber"`
-	Version      int    `json:"version"`
+	SerialNumber string   `json:"serialNumber"`
+	Version      int      `json:"version"`
+	SimpleStats  BomStats `json:"stats"`
 }
 
 func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
@@ -53,20 +55,32 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		return BOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
 	}
 
+	bomStats := BOMStats(ctx, &bom)
+	b, err := json.Marshal(bomStats)
+	if err != nil {
+		return BOMCreated{}, fmt.Errorf("`json.Marshal()` failed: %w", err)
+	}
+
+	var retVal BOMCreated
+	var retErr error
 	switch {
 	case bom.SerialNumber == "":
-		return s.uploadCaseSNInvalid(ctx, bom, buf)
+		retVal, retErr = s.uploadCaseSNInvalid(ctx, bom, buf, string(b))
 
 	case bom.Version < 1:
-		return s.uploadCaseSNValidVersionInvalid(ctx, bom)
+		retVal, retErr = s.uploadCaseSNValidVersionInvalid(ctx, bom, string(b))
 
 	default:
 		// serial number of the BOM is valid, version is set
-		return s.uploadCaseSNValidVersionValid(ctx, bom, buf)
+		retVal, retErr = s.uploadCaseSNValidVersionValid(ctx, bom, buf, string(b))
 	}
+	if retErr == nil {
+		retVal.SimpleStats = bomStats
+	}
+	return retVal, retErr
 }
 
-func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer) (BOMCreated, error) {
+func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, stats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM does not have serial number specified - generating a new one.")
 	// serial number is missing, so we're going to generate a unique new one,
 	// that means this will be version 1, even if something else was set
@@ -83,26 +97,25 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 			break
 		}
 	}
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"service-layer",
-		slog.String("new-serial-number", bom.SerialNumber)),
-	)
+	ctx = log.ContextAttrs(ctx, slog.String("new-serial-number", bom.SerialNumber))
 	slog.DebugContext(ctx, "New serial number generated.")
 
 	// store the original unchanged BOM
 	metaOriginal := store.Metadata{
 		Timestamp: time.Now().UTC(),
 		Version:   "original",
+		Stats:     stats,
 	}
 	if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, orig.Bytes()); err != nil {
 		return BOMCreated{}, err
 	}
-	slog.DebugContext(ctx, "Stored original BOM")
+	slog.DebugContext(ctx, "Stored original BOM.")
 
 	// store the modified BOM with serialNumber and version set
 	meta := store.Metadata{
 		Timestamp: time.Now().UTC(),
 		Version:   fmt.Sprintf("%d", bom.Version),
+		Stats:     stats,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -115,7 +128,7 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
 		return BOMCreated{}, err
 	}
-	slog.DebugContext(ctx, "Stored modified version")
+	slog.DebugContext(ctx, "Stored modified version.")
 
 	return BOMCreated{
 		SerialNumber: bom.SerialNumber,
@@ -123,25 +136,28 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 	}, nil
 }
 
-func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM) (BOMCreated, error) {
+func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM, stats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM has only serial number specified - fetching the latest version")
 	versions, hasOriginal, err := s.store.GetObjectVersions(ctx, bom.SerialNumber)
-	if err != nil {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		bom.Version = 1
+		slog.DebugContext(ctx, "First BOM with this SN, assigning Version '1'.")
+	case err != nil:
 		return BOMCreated{}, err
+	default:
+		bom.Version = versions[len(versions)-1] + 1
+		slog.DebugContext(ctx, "New version assigned to BOM.",
+			slog.Int("new-version", bom.Version),
+			slog.Any("all-versions", versions),
+			slog.Bool("has-original", hasOriginal),
+		)
 	}
-	bom.Version = versions[len(versions)-1] + 1
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"service-layer",
-		slog.Int("new-version", bom.Version),
-		slog.Any("all-versions", versions),
-		slog.Bool("has-original", hasOriginal),
-	),
-	)
-	slog.DebugContext(ctx, "New version assigned to BOM.")
 
 	meta := store.Metadata{
 		Timestamp: time.Now().UTC(),
 		Version:   fmt.Sprintf("%d", bom.Version),
+		Stats:     stats,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -153,14 +169,14 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, modifiedBuf.Bytes()); err != nil {
 		return BOMCreated{}, err
 	}
-	slog.DebugContext(ctx, "Stored modified version")
+	slog.DebugContext(ctx, "Stored modified BOM.")
 	return BOMCreated{
 		SerialNumber: bom.SerialNumber,
 		Version:      bom.Version,
 	}, nil
 }
 
-func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer) (BOMCreated, error) {
+func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, stats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM has serial number and version specified.")
 	// let's make sure it doesn't exist already
 	exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
@@ -177,6 +193,7 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 	meta := store.Metadata{
 		Timestamp: time.Now().UTC(),
 		Version:   fmt.Sprintf("%d", bom.Version),
+		Stats:     stats,
 	}
 
 	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, orig.Bytes()); err != nil {
@@ -197,7 +214,7 @@ func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
 		return fmt.Errorf("required format %s", cdx.BOMFormat)
 	}
 	// if the serial number is set, it must be a valid URN conforming to RFC 4122
-	if bom.SerialNumber != "" && !uploadValidateURN(bom.SerialNumber) {
+	if bom.SerialNumber != "" && !URNValid(bom.SerialNumber) {
 		return fmt.Errorf("serial number not valid")
 	}
 
@@ -210,25 +227,6 @@ func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
 	}
 
 	return nil
-}
-
-// uploadValidateURN returns true if `urn` is a valid URN conforming to RFC-4122.
-// URN format is defined as `urn:<NID>:<NSS>`
-// where:
-//   - <NID> means Namespace Identifier. For RFC-4122 this means exactly "uuid" string.
-//   - <NSS> means Namespace Specific String. For RFC-4122 this means a valid UUID.
-func uploadValidateURN(urn string) bool {
-	subs := strings.Split(urn, ":")
-	if len(subs) != 3 {
-		return false
-	}
-	if subs[0] != "urn" || subs[1] != "uuid" {
-		return false
-	}
-	if _, err := uuid.Parse(subs[2]); err != nil {
-		return false
-	}
-	return true
 }
 
 func uploadKey(urn string, version int) string {

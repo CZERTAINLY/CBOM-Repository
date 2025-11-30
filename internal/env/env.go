@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/CZERTAINLY/CBOM-Repository/internal/http"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/kelseyhightower/envconfig"
@@ -14,7 +15,7 @@ const defaultPrefix = "APP"
 
 type Config struct {
 	Store    store.Config
-	HttpPort int        `envconfig:"APP_HTTP_PORT" default:"8080"`
+	Http     http.Config
 	LogLevel slog.Level `envconfig:"APP_LOG_LEVEL" default:"INFO"`
 }
 

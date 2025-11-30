@@ -46,15 +46,15 @@ func main() {
 	healthSvc := health.NewService(storageChecker)
 	slog.Debug("Health service initialized.")
 
-	srv := internalHttp.New(svc, healthSvc)
+	srv := internalHttp.New(cfg.Http, svc, healthSvc)
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.HttpPort),
-		Handler: internalHttp.Handler(srv),
+		Addr:    fmt.Sprintf(":%d", cfg.Http.Port),
+		Handler: srv.Handler(),
 	}
 
-	slog.Info("Starting http server.")
+	slog.Info("Starting http server.", slog.Int("port", cfg.Http.Port))
 
-	if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("`ListenAndServer()` failed.", slog.String("error", err.Error()))
 		os.Exit(1)
 	}

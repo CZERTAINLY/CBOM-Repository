@@ -14,6 +14,7 @@ import (
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
+	"github.com/google/uuid"
 	jss "github.com/kaptinlin/jsonschema"
 )
 
@@ -80,11 +81,7 @@ type SearchRes struct {
 func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 	res := []SearchRes{}
 
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"service-layer",
-		slog.Int64("timestamp", ts),
-	))
-
+	ctx = log.ContextAttrs(ctx, slog.Int64("timestamp", ts))
 	slog.DebugContext(ctx, "Calling `store.Search()`.")
 
 	r, err := s.store.Search(ctx, ts)
@@ -93,11 +90,8 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 	}
 
 	slog.DebugContext(ctx, "`store.Search()` finished.",
-		slog.Group(
-			"response",
-			slog.Int("count", len(r)),
-			slog.String("value", strings.Join(r, ",")),
-		),
+		slog.Int("count", len(r)),
+		slog.String("value", strings.Join(r, ",")),
 	)
 
 	for _, cpy := range r {
@@ -116,11 +110,10 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 }
 
 func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[string]interface{}, error) {
-	ctx = log.ContextAttrs(ctx, slog.Group(
-		"service-layer",
+	ctx = log.ContextAttrs(ctx,
 		slog.String("urn", urn),
 		slog.String("version", version),
-	))
+	)
 
 	if strings.TrimSpace(version) == "" {
 		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersion()` to obtain the latest BOM version stored.")
@@ -134,10 +127,11 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 		}
 
 		version = fmt.Sprintf("%d", versions[len(versions)-1])
-		slog.DebugContext(ctx, "Latest version selected.",
+		slog.DebugContext(ctx, "Latest version selected.", slog.Group("getObjectVersionsResult",
 			slog.Any("all-versions", versions),
 			slog.String("selected-version", version),
 			slog.Bool("has-original", hasOriginal),
+		),
 		)
 		ctx = log.ContextAttrs(ctx, slog.String("selected-version", version))
 	}
@@ -160,4 +154,23 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 	}
 
 	return bomMap, nil
+}
+
+// URNValid returns true if `urn` is a valid URN conforming to RFC-4122.
+// URN format is defined as `urn:<NID>:<NSS>`
+// where:
+//   - <NID> means Namespace Identifier. For RFC-4122 this means exactly "uuid" string.
+//   - <NSS> means Namespace Specific String. For RFC-4122 this means a valid UUID.
+func URNValid(urn string) bool {
+	subs := strings.Split(urn, ":")
+	if len(subs) != 3 {
+		return false
+	}
+	if subs[0] != "urn" || subs[1] != "uuid" {
+		return false
+	}
+	if _, err := uuid.Parse(subs[2]); err != nil {
+		return false
+	}
+	return true
 }

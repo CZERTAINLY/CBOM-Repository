@@ -9,11 +9,11 @@ import (
 type Status string
 
 const (
-	StatusUp            Status = "UP"
-	StatusDown          Status = "DOWN"
-	StatusOutOfService  Status = "OUT_OF_SERVICE"
-	StatusUnknown       Status = "UNKNOWN"
-	StatusDegraded      Status = "DEGRADED"
+	StatusUp           Status = "UP"
+	StatusDown         Status = "DOWN"
+	StatusOutOfService Status = "OUT_OF_SERVICE"
+	StatusUnknown      Status = "UNKNOWN"
+	StatusDegraded     Status = "DEGRADED"
 )
 
 // Component represents the health status of a single component
@@ -49,19 +49,19 @@ func NewService(checkers ...Checker) Service {
 // CheckHealth performs all health checks and returns the overall health status
 func (s Service) CheckHealth(ctx context.Context) Health {
 	components := make(map[string]Component)
-	
+
 	// Always include liveness and readiness
 	components["liveness"] = Component{Status: StatusUp}
 	components["readiness"] = Component{Status: StatusUp}
-	
+
 	// Run all registered checkers
 	for _, checker := range s.checkers {
 		components[checker.Name()] = checker.Check(ctx)
 	}
-	
+
 	// Calculate overall status
 	overallStatus := calculateOverallStatus(components)
-	
+
 	return Health{
 		Status:     overallStatus,
 		Components: components,
@@ -81,12 +81,12 @@ func (s Service) CheckLiveness(ctx context.Context) Health {
 // CheckReadiness returns readiness probe status
 func (s Service) CheckReadiness(ctx context.Context) Health {
 	components := make(map[string]Component)
-	
+
 	// Run all registered checkers
 	for _, checker := range s.checkers {
 		components[checker.Name()] = checker.Check(ctx)
 	}
-	
+
 	// Check if any critical components are down
 	ready := true
 	for _, comp := range components {
@@ -95,12 +95,12 @@ func (s Service) CheckReadiness(ctx context.Context) Health {
 			break
 		}
 	}
-	
+
 	status := StatusUp
 	if !ready {
 		status = StatusOutOfService
 	}
-	
+
 	return Health{
 		Status: status,
 		Components: map[string]Component{
@@ -114,26 +114,26 @@ func (s Service) CheckReadiness(ctx context.Context) Health {
 func calculateOverallStatus(components map[string]Component) Status {
 	liveness, hasLiveness := components["liveness"]
 	readiness, hasReadiness := components["readiness"]
-	
+
 	// Rule 1: If liveness.status != UP → overall status = DOWN
 	if hasLiveness && liveness.Status != StatusUp {
 		return StatusDown
 	}
-	
+
 	// Rule 2: If readiness.status != UP → overall status = DOWN
 	if hasReadiness && readiness.Status != StatusUp {
 		return StatusDown
 	}
-	
+
 	// Rule 3: Compute the worst status among all remaining components
 	worstStatus := StatusUp
-	
+
 	for name, comp := range components {
 		// Skip liveness and readiness as they are already checked
 		if name == "liveness" || name == "readiness" {
 			continue
 		}
-		
+
 		switch comp.Status {
 		case StatusDown, StatusOutOfService:
 			// Any DOWN/OUT_OF_SERVICE → overall DEGRADED
@@ -150,7 +150,7 @@ func calculateOverallStatus(components map[string]Component) Status {
 			}
 		}
 	}
-	
+
 	return worstStatus
 }
 
@@ -173,11 +173,11 @@ func NewStorageChecker(store StorageHealthChecker) StorageChecker {
 func (c StorageChecker) Check(ctx context.Context) Component {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	startTime := time.Now()
 	err := c.store.HealthCheck(ctx)
 	latency := time.Since(startTime).Milliseconds()
-	
+
 	if err != nil {
 		return Component{
 			Status: StatusDown,
@@ -187,7 +187,7 @@ func (c StorageChecker) Check(ctx context.Context) Component {
 			},
 		}
 	}
-	
+
 	return Component{
 		Status: StatusUp,
 		Details: map[string]any{

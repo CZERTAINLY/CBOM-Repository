@@ -74,7 +74,7 @@ func TestUploadInputChecks(t *testing.T) {
 	}
 }
 
-func TestUploadValidateURN(t *testing.T) {
+func TestURNValid(t *testing.T) {
 	testCases := map[string]struct {
 		input string
 		want  bool
@@ -159,7 +159,7 @@ func TestUploadValidateURN(t *testing.T) {
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			got := uploadValidateURN(tc.input)
+			got := URNValid(tc.input)
 			require.Equal(t, tc.want, got)
 		})
 	}
