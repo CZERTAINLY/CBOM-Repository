@@ -94,11 +94,11 @@ func statsRelated(ctx context.Context, as *AssetStats, c cdx.Component) {
 	switch c.CryptoProperties.RelatedCryptoMaterialProperties.Type {
 	case cdx.RelatedCryptoMaterialTypePrivateKey:
 		as.Keys.Total += 1
-		as.Keys.Asym = +1
+		as.Keys.Asym += 1
 
 	case cdx.RelatedCryptoMaterialTypePublicKey:
 		as.Keys.Total += 1
-		as.Keys.Asym = +1
+		as.Keys.Asym += 1
 
 	case cdx.RelatedCryptoMaterialTypePassword:
 		fallthrough
