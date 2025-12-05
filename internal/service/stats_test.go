@@ -91,14 +91,10 @@ func TestStats1(t *testing.T) {
 
 	bomStats := service.BOMStats(context.Background(), &bom)
 
-	require.Equal(t, 2, bomStats.Stats.Algo.Count)
-	require.ElementsMatch(t, []int{2048, 128}, bomStats.Stats.Algo.KeySizes)
-	require.ElementsMatch(t, []string{"AES-128-GCM", "RSA-2048"}, bomStats.Stats.Algo.Unique)
-	require.Equal(t, 1, bomStats.Stats.Asset.Total)
-	require.Equal(t, 1, bomStats.Stats.Asset.Keys.Total)
-	require.Equal(t, 1, bomStats.Stats.Asset.Keys.Asym)
-	require.Equal(t, 0, bomStats.Stats.Asset.Keys.Sym)
-	require.Equal(t, 0, bomStats.Stats.Asset.HashFns.Total)
-	require.Equal(t, 0, bomStats.Stats.Asset.SignSchemes.Total)
-	require.Equal(t, 0, bomStats.Stats.Asset.KeyAgreements.Total)
+	require.Equal(t, 3, bomStats.Stats.CryptoAssets.Total)
+	require.Equal(t, 2, bomStats.Stats.CryptoAssets.Algo.Total)
+	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Cert.Total)
+	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Protocol.Total)
+	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Related.Total)
+
 }
