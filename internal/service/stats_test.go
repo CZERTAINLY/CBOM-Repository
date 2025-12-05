@@ -68,6 +68,36 @@ func TestStats1(t *testing.T) {
       "type": "cryptographic-asset",
       "bom-ref": "crypto/algorithm/rsa-2048@1.5.820.122543.8.8.8"
     },
+	{
+      "name": "google.com",
+      "type": "cryptographic-asset",
+      "bom-ref": "crypto/certificate/google.com@sha256:1e15e0fbd3ce95bde5945633ae96add551341b11e5bae7bba12e98ad84a5beb4",
+      "cryptoProperties": {
+        "assetType": "certificate",
+        "certificateProperties": {
+          "subjectName": "CN = www.google.com",
+          "issuerName": "C = US, O = Google Trust Services LLC, CN = GTS CA 1C3",
+          "notValidBefore": "2016-11-21T08:00:00Z",
+          "notValidAfter": "2017-11-22T07:59:59Z",
+          "signatureAlgorithmRef": "crypto/algorithm/sha-512-rsa@1.2.840.113549.1.1.13",
+          "subjectPublicKeyRef": "crypto/key/rsa-2048@1.2.840.113549.1.1.1",
+          "certificateFormat": "X.509",
+          "certificateExtension": "crt"
+        }
+      }
+    },
+	{
+      "name": "made-up-protocol",
+      "type": "cryptographic-asset",
+      "bom-ref": "i've made up this too",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+			"type" : "tls",
+			"Version" : "v1"
+        }
+      }
+    },
     {
       "name": "RSA",
       "type": "framework",
@@ -101,10 +131,10 @@ func TestStats1(t *testing.T) {
 
 	bomStats := service.BOMStats(context.Background(), &bom)
 
-	require.Equal(t, 3, bomStats.Stats.CryptoAssets.Total)
+	require.Equal(t, 5, bomStats.Stats.CryptoAssets.Total)
 	require.Equal(t, 2, bomStats.Stats.CryptoAssets.Algo.Total)
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Cert.Total)
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Protocol.Total)
+	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Cert.Total)
+	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Protocol.Total)
 	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Related.Total)
 
 }
