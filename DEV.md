@@ -38,17 +38,14 @@ and run it.
 
 The following environment variables are used to configure the `CBOM-Repository`:
 
-|   Environment Variable   |  Required  | Default Value | Explanation |
-| :----------------------: | :--------: | :-------------: | :-------------: |
-| APP_LOG_LEVEL            | Yes | "INFO" | logger level, possible values: \[ DEBUG, INFO, WARN, ERROR \] |
-| APP_HTTP_PORT            | Yes | 8080 | HTTP server port |
-| APP_HTTP_PREFIX          | Yes | "/api" | HTTP server handlers route prefix, mainly used to mount the CBOM-Repository handlers under a different starting path |
-| APP_S3_ACCESS_KEY        | Yes | - | s3-compatible store access key |
-| APP_S3_SECRET_KEY        | Yes | - | s3-compatible store secret key |
-| APP_S3_REGION            | Yes | - | s3-compatible store Region |
-| APP_S3_ENDPOINT          | No | - | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
-| APP_S3_BUCKET            | Yes | - | bucket name |
-| APP_S3_USE_PATH_STYLE    | Yes | true | Use s3 path style |
-
-
-
+| Environment Variable    | Required                                           | Default Value | Explanation                                                                                                          |
+|:------------------------|:---------------------------------------------------|:--------------|:---------------------------------------------------------------------------------------------------------------------|
+| `APP_LOG_LEVEL`         | ![](https://img.shields.io/badge/-YES-success.svg) | `INFO`        | logger level, possible values: `DEBUG`, `INFO`, `WARN`, `ERROR`                                                      |
+| `APP_HTTP_PORT`         | ![](https://img.shields.io/badge/-YES-success.svg) | `8080`        | HTTP server port                                                                                                     |
+| `APP_HTTP_PREFIX`       | ![](https://img.shields.io/badge/-YES-success.svg) | `/api`        | HTTP server handlers route prefix, mainly used to mount the CBOM Repository handlers under a different starting path |
+| `APP_S3_ACCESS_KEY`     | ![](https://img.shields.io/badge/-YES-success.svg) |               | s3-compatible store access key                                                                                       |
+| `APP_S3_SECRET_KEY`     | ![](https://img.shields.io/badge/-YES-success.svg) |               | s3-compatible store secret key                                                                                       |
+| `APP_S3_REGION`         | ![](https://img.shields.io/badge/-YES-success.svg) |               | s3-compatible store Region                                                                                           |
+| `APP_S3_ENDPOINT`       | ![](https://img.shields.io/badge/-NO-red.svg)      |               | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence             |
+| `APP_S3_BUCKET`         | ![](https://img.shields.io/badge/-YES-success.svg) |               | bucket name                                                                                                          |
+| `APP_S3_USE_PATH_STYLE` | ![](https://img.shields.io/badge/-YES-success.svg) | `true`        | Use s3 path style                                                                                                    |
