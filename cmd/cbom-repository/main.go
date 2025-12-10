@@ -16,6 +16,8 @@ import (
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 )
 
+const releaseVersion = "v0.9.0"
+
 func main() {
 
 	// get configuration from environment variables
@@ -24,6 +26,7 @@ func main() {
 		panic(err)
 	}
 	initializeLogging(cfg.LogLevel)
+	slog.Info("Starting service 'CBOM-Repository'.", slog.String("version", releaseVersion))
 	slog.Debug("Service configuration read from environment variables.")
 
 	s3Client, s3Uploader, err := store.ConnectS3(context.Background(), cfg.Store)
