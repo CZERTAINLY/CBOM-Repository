@@ -1,19 +1,22 @@
-name: Test Docker image
+name: Publish 3Key Docker image
 
 on:
-  pull_request:
-    paths-ignore:
-      - 'deploy/charts/**'
-    branches: [ main ]
+  push:
+    branches: [main]
+    tags:
+      - '*'
   workflow_dispatch:
 
 jobs:
   push_to_registry:
-    name: Build Docker images
+    name: Push Docker images
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6
+        uses: actions/checkout@v5
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -21,14 +24,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Log in to 3Key Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_3KEY_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_3KEY_PASSWORD }}
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            czertainly/cbom-repository
+            3keycompany/cbom-repository
           tags: |
             type=ref,event=tag
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
             type=raw,value=develop-latest
             type=sha,prefix=develop-,format=long
 
@@ -52,7 +64,7 @@ jobs:
           echo "value=$FIRST_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           image-ref: ${{ steps.tag.outputs.value }}
           format: json
@@ -60,26 +72,49 @@ jobs:
           exit-code: 0
 
       - name: Upload vulnerability report
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v5
+        uses: actions/upload-artifact@v5
         with:
           name: trivy-report
           path: trivy-report.json
 
       - name: Fail build on vulnerabilities
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           image-ref: ${{ steps.tag.outputs.value }}
           trivy-config: config/trivy.yaml
           skip-setup-trivy: true
 
-      - name: Build Docker image
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
-        id: build-docker-image
+        id: build-and-push
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           file: ./Dockerfile
+          push: true
           provenance: mode=max
           sbom: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Sign images with a key
+        run: |
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag}@${DIGEST} "
+          done
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY ${images}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+
+      - name: Push README to 3Key Docker Hub
+        uses: christian-korneck/update-container-description-action@v1
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_HUB_3KEY_USERNAME }}
+          DOCKER_PASS: ${{ secrets.DOCKER_HUB_3KEY_PASSWORD }}
+        with:
+          destination_container_repo: 3keycompany/cbom-repository
+          provider: dockerhub
