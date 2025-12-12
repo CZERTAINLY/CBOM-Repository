@@ -3,9 +3,6 @@
 ########################
 FROM golang:1.25-alpine3.22 AS builder
 
-# We need to install git to be able to identify version from git tags
-RUN apk add --no-cache git
-
 ARG VERSION=dev
 ENV CGO_ENABLED=0 \
     GOFLAGS="-trimpath" \

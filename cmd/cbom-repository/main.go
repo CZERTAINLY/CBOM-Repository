@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"runtime/debug"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
@@ -17,6 +16,8 @@ import (
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 )
 
+var version = "dev"
+
 func main() {
 	// get configuration from environment variables
 	cfg, err := env.New()
@@ -24,13 +25,7 @@ func main() {
 		panic(err)
 	}
 	initializeLogging(cfg.LogLevel)
-	slog.Info("Starting service 'CBOM-Repository'.")
-	info, ok := debug.ReadBuildInfo()
-	if !ok || info == nil {
-		slog.Warn("No build information available")
-	} else {
-		slog.Info("Build information'.", slog.String("version", info.Main.Version))
-	}
+	slog.Info("Starting service 'CBOM-Repository'.", slog.String("version", version))
 	slog.Debug("Service configuration read from environment variables.")
 
 	s3Client, s3Uploader, err := store.ConnectS3(context.Background(), cfg.Store)
