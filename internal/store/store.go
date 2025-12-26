@@ -23,8 +23,6 @@ var (
 )
 
 const (
-	MetaTimestampKey   = "timestamp"
-	MetaContentTypeKey = "content-type"
 	MetaVersionKey     = "version"
 	MetaCryptoStatsKey = "crypto-stats"
 )
@@ -64,7 +62,6 @@ type Metadata struct {
 
 func (m Metadata) Map() map[string]string {
 	return map[string]string{
-		MetaTimestampKey:   fmt.Sprintf("%d", m.Timestamp.Unix()),
 		MetaVersionKey:     m.Version,
 		MetaCryptoStatsKey: m.CryptoStats,
 	}
