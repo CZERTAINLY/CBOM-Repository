@@ -76,8 +76,10 @@ func (s Service) VersionSupported(version string) bool {
 }
 
 type SearchRes struct {
-	SerialNumber string `json:"serialNumber"`
-	Version      string `json:"version"`
+	SerialNumber string      `json:"serialNumber"`
+	Version      string      `json:"version"`
+	Timestamp    string      `json:"timestamp"`
+	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
 func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
@@ -103,9 +105,38 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 				slog.String("key", cpy), slog.String("expected-format", "urn:uuid:<uuid>-<version>"))
 			return nil, errors.New("unexpected key returned from store")
 		}
+
+		head, err := s.store.GetHeadObject(ctx, cpy)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			slog.WarnContext(ctx, fmt.Sprintf("Fetching HeadObject for key %q failed although version was previously returned by `store.Search()`. Skipping from result set.", cpy))
+			continue
+
+		case err != nil:
+			return nil, err
+		}
+
+		cryptoStatsValue, ok := head.Metadata[store.MetaCryptoStatsKey]
+		if !ok {
+			slog.WarnContext(ctx,
+				fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
+				slog.String("object-key", cpy))
+			continue
+		}
+
+		var cryptoStats CryptoStats
+		if err := json.Unmarshal([]byte(cryptoStatsValue), &cryptoStats); err != nil {
+			slog.ErrorContext(ctx,
+				fmt.Sprintf("Unmarshaling metadata key %q value failed.", store.MetaCryptoStatsKey),
+				slog.String("error", err.Error()), slog.String("object-key", cpy))
+			return res, errors.New("unmarshaling json failed")
+		}
+
 		res = append(res, SearchRes{
 			SerialNumber: cpy[:idx],
 			Version:      cpy[idx+1:],
+			Timestamp:    head.LastModified.Format(time.RFC3339),
+			CryptoStats:  cryptoStats,
 		})
 	}
 	return res, nil
@@ -210,11 +241,10 @@ func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, err
 
 		res[i].Timestamp = head.LastModified.Format(time.RFC3339)
 		if err := json.Unmarshal([]byte(cryptoStats), &res[i].CryptoStats); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling string from object's metadata key %q failed.", store.MetaCryptoStatsKey),
-				slog.String("error", err.Error()))
+			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling metadata key %q value failed.", store.MetaCryptoStatsKey),
+				slog.String("error", err.Error()), slog.String("object-key", fmt.Sprintf("%s-%s", urn, res[i].Version)))
 			return res, errors.New("unmarshaling json failed")
 		}
-
 	}
 	return res, nil
 }

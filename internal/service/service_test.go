@@ -11,6 +11,7 @@ import (
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,28 @@ func TestSearch_Success(t *testing.T) {
 		Contents: []types.Object{
 			{Key: awsString("urn:uuid:1-1"), LastModified: &now},
 			{Key: awsString("urn:uuid:2-2"), LastModified: &now},
+		},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{
+		Bucket: aws.String("bucket"),
+		Key:    aws.String("urn:uuid:1-1"),
+	}).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(123456),
+		ContentType:   aws.String("application/vnd.cyclonedx+json"),
+		LastModified:  &now,
+		Metadata: map[string]string{
+			store.MetaCryptoStatsKey: "{}",
+		},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{
+		Bucket: aws.String("bucket"),
+		Key:    aws.String("urn:uuid:2-2"),
+	}).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(123456),
+		ContentType:   aws.String("application/vnd.cyclonedx+json"),
+		LastModified:  &now,
+		Metadata: map[string]string{
+			store.MetaCryptoStatsKey: "{}",
 		},
 	}, nil)
 
