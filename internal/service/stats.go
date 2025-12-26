@@ -7,12 +7,8 @@ import (
 	cdx "github.com/CycloneDX/cyclonedx-go"
 )
 
-type BomStats struct {
-	Stats CryptoStats `json:"crypto-stats"`
-}
-
 type CryptoStats struct {
-	CryptoAssets CryptoAssetStats `json:"crypto-assets"`
+	CryptoAsset CryptoAssetStats `json:"cryptoAssets"`
 }
 
 type CryptoAssetStats struct {
@@ -20,18 +16,18 @@ type CryptoAssetStats struct {
 	Algo     TotalStats `json:"algorithms"`
 	Cert     TotalStats `json:"certificates"`
 	Protocol TotalStats `json:"protocols"`
-	Related  TotalStats `json:"related-crypto-materials"`
+	Related  TotalStats `json:"relatedCryptoMaterials"`
 }
 
 type TotalStats struct {
 	Total int `json:"total"`
 }
 
-func BOMStats(ctx context.Context, bom *cdx.BOM) BomStats {
-	var bomStats BomStats
+func CalculateCryptoStats(ctx context.Context, bom *cdx.BOM) CryptoStats {
+	var cryptoStats CryptoStats
 	if bom.Components == nil {
 		slog.WarnContext(ctx, "BOM has nil root level 'Components' field.", slog.String("serialNumber", bom.SerialNumber))
-		return bomStats
+		return cryptoStats
 	}
 
 	for _, component := range *bom.Components {
@@ -43,21 +39,21 @@ func BOMStats(ctx context.Context, bom *cdx.BOM) BomStats {
 			slog.WarnContext(ctx, "Component is a crypto asset but has a nil CryptoProperties field. Skipping.", slog.String("bom-ref", component.BOMRef))
 			continue
 		}
-		bomStats.Stats.CryptoAssets.Total += 1
+		cryptoStats.CryptoAsset.Total += 1
 
 		switch component.CryptoProperties.AssetType {
 		case cdx.CryptoAssetTypeAlgorithm:
-			bomStats.Stats.CryptoAssets.Algo.Total += 1
+			cryptoStats.CryptoAsset.Algo.Total += 1
 
 		case cdx.CryptoAssetTypeCertificate:
-			bomStats.Stats.CryptoAssets.Cert.Total += 1
+			cryptoStats.CryptoAsset.Cert.Total += 1
 
 		case cdx.CryptoAssetTypeProtocol:
-			bomStats.Stats.CryptoAssets.Protocol.Total += 1
+			cryptoStats.CryptoAsset.Protocol.Total += 1
 
 		case cdx.CryptoAssetTypeRelatedCryptoMaterial:
-			bomStats.Stats.CryptoAssets.Related.Total += 1
+			cryptoStats.CryptoAsset.Related.Total += 1
 		}
 	}
-	return bomStats
+	return cryptoStats
 }

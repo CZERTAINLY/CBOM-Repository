@@ -53,7 +53,7 @@ func TestSearch_Success(t *testing.T) {
 	res, err := svc.Search(context.Background(), now.Unix()-1)
 	require.NoError(t, err)
 	require.Len(t, res, 2)
-	require.Equal(t, "urn:uuid:1", res[0].URN)
+	require.Equal(t, "urn:uuid:1", res[0].SerialNumber)
 	require.Equal(t, "1", res[0].Version)
 }
 

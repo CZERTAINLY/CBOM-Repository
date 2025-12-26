@@ -18,9 +18,9 @@ import (
 )
 
 type BOMCreated struct {
-	SerialNumber string   `json:"serialNumber"`
-	Version      int      `json:"version"`
-	SimpleStats  BomStats `json:"stats"`
+	SerialNumber string      `json:"serialNumber"`
+	Version      int         `json:"version"`
+	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
 func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
@@ -55,8 +55,8 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		return BOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
 	}
 
-	bomStats := BOMStats(ctx, &bom)
-	b, err := json.Marshal(bomStats)
+	cryptoStats := CalculateCryptoStats(ctx, &bom)
+	b, err := json.Marshal(cryptoStats)
 	if err != nil {
 		return BOMCreated{}, fmt.Errorf("`json.Marshal()` failed: %w", err)
 	}
@@ -75,12 +75,12 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		retVal, retErr = s.uploadCaseSNValidVersionValid(ctx, bom, buf, string(b))
 	}
 	if retErr == nil {
-		retVal.SimpleStats = bomStats
+		retVal.CryptoStats = cryptoStats
 	}
 	return retVal, retErr
 }
 
-func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, stats string) (BOMCreated, error) {
+func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, cryptoStats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM does not have serial number specified - generating a new one.")
 	// serial number is missing, so we're going to generate a unique new one,
 	// that means this will be version 1, even if something else was set
@@ -102,9 +102,9 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the original unchanged BOM
 	metaOriginal := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   "original",
-		Stats:     stats,
+		Timestamp:   time.Now().UTC(),
+		Version:     "original",
+		CryptoStats: cryptoStats,
 	}
 	if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, orig.Bytes()); err != nil {
 		return BOMCreated{}, err
@@ -113,9 +113,9 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the modified BOM with serialNumber and version set
 	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   fmt.Sprintf("%d", bom.Version),
-		Stats:     stats,
+		Timestamp:   time.Now().UTC(),
+		Version:     fmt.Sprintf("%d", bom.Version),
+		CryptoStats: cryptoStats,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -136,7 +136,7 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 	}, nil
 }
 
-func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM, stats string) (BOMCreated, error) {
+func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM, cryptoStats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM has only serial number specified - fetching the latest version")
 	versions, hasOriginal, err := s.store.GetObjectVersions(ctx, bom.SerialNumber)
 	switch {
@@ -155,9 +155,9 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	}
 
 	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   fmt.Sprintf("%d", bom.Version),
-		Stats:     stats,
+		Timestamp:   time.Now().UTC(),
+		Version:     fmt.Sprintf("%d", bom.Version),
+		CryptoStats: cryptoStats,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -176,7 +176,7 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	}, nil
 }
 
-func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, stats string) (BOMCreated, error) {
+func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, cryptoStats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM has serial number and version specified.")
 	// let's make sure it doesn't exist already
 	exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
@@ -191,9 +191,9 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 	}
 
 	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   fmt.Sprintf("%d", bom.Version),
-		Stats:     stats,
+		Timestamp:   time.Now().UTC(),
+		Version:     fmt.Sprintf("%d", bom.Version),
+		CryptoStats: cryptoStats,
 	}
 
 	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, orig.Bytes()); err != nil {

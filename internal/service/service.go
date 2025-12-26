@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
@@ -74,8 +76,8 @@ func (s Service) VersionSupported(version string) bool {
 }
 
 type SearchRes struct {
-	URN     string `json:"serialNumber"`
-	Version string `json:"version"`
+	SerialNumber string `json:"serialNumber"`
+	Version      string `json:"version"`
 }
 
 func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
@@ -102,8 +104,8 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 			return nil, errors.New("unexpected key returned from store")
 		}
 		res = append(res, SearchRes{
-			URN:     cpy[:idx],
-			Version: cpy[idx+1:],
+			SerialNumber: cpy[:idx],
+			Version:      cpy[idx+1:],
 		})
 	}
 	return res, nil
@@ -154,6 +156,67 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 	}
 
 	return bomMap, nil
+}
+
+type VersionRes struct {
+	Version     string      `json:"version"`
+	Timestamp   string      `json:"timestamp"`
+	CryptoStats CryptoStats `json:"cryptoStats"`
+}
+
+func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, error) {
+	ctx = log.ContextAttrs(ctx,
+		slog.String("urn", urn),
+	)
+
+	versions, hasOriginal, err := s.store.GetObjectVersions(ctx, urn)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return nil, ErrNotFound
+
+	case err != nil:
+		return nil, err
+	}
+
+	res := []VersionRes{}
+	for _, cpy := range versions {
+		res = append(res, VersionRes{
+			Version: strconv.Itoa(cpy),
+		})
+	}
+	if hasOriginal {
+		res = append(res, VersionRes{
+			Version: "original",
+		})
+	}
+	for i := range res {
+		head, err := s.store.GetHeadObject(ctx, fmt.Sprintf("%s-%s", urn, res[i].Version))
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			slog.WarnContext(ctx, "Fetching HeadObject for key failed although version was previously returned by `store.GetObjectVersions()`. Skipping from result set.",
+				slog.String("key", fmt.Sprintf("%s-%s", urn, res[i].Version)), slog.String("version", res[i].Version))
+			continue
+
+		case err != nil:
+			return nil, err
+		}
+
+		cryptoStats, ok := head.Metadata[store.MetaCryptoStatsKey]
+		if !ok {
+			slog.WarnContext(ctx, fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
+				slog.String("object-key", fmt.Sprintf("%s-%s", urn, res[i].Version)))
+			continue
+		}
+
+		res[i].Timestamp = head.LastModified.Format(time.RFC3339)
+		if err := json.Unmarshal([]byte(cryptoStats), &res[i].CryptoStats); err != nil {
+			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling string from object's metadata key %q failed.", store.MetaCryptoStatsKey),
+				slog.String("error", err.Error()))
+			return res, errors.New("unmarshaling json failed")
+		}
+
+	}
+	return res, nil
 }
 
 // URNValid returns true if `urn` is a valid URN conforming to RFC-4122.
