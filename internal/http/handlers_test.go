@@ -480,6 +480,28 @@ func TestSearch(t *testing.T) {
 						{Key: aws.String("urn:uuid:2-2"), LastModified: &now},
 					},
 				}, nil)
+				s3c.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{
+					Bucket: aws.String("bucket"),
+					Key:    aws.String("urn:uuid:1-1"),
+				}).Return(&s3.HeadObjectOutput{
+					ContentLength: aws.Int64(123456),
+					ContentType:   aws.String("application/vnd.cyclonedx+json"),
+					LastModified:  &now,
+					Metadata: map[string]string{
+						store.MetaCryptoStatsKey: "{}",
+					},
+				}, nil)
+				s3c.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{
+					Bucket: aws.String("bucket"),
+					Key:    aws.String("urn:uuid:2-2"),
+				}).Return(&s3.HeadObjectOutput{
+					ContentLength: aws.Int64(123456),
+					ContentType:   aws.String("application/vnd.cyclonedx+json"),
+					LastModified:  &now,
+					Metadata: map[string]string{
+						store.MetaCryptoStatsKey: "{}",
+					},
+				}, nil)
 			},
 			expectedStatus: http.StatusOK,
 			prefix:         "/api",

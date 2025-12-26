@@ -23,10 +23,8 @@ var (
 )
 
 const (
-	MetaTimestampKey   = "timestamp"
-	MetaContentTypeKey = "content-type"
 	MetaVersionKey     = "version"
-	MetaStatsKey       = "stats"
+	MetaCryptoStatsKey = "crypto-stats"
 )
 
 type S3Contract interface {
@@ -57,16 +55,15 @@ type Store struct {
 }
 
 type Metadata struct {
-	Timestamp time.Time
-	Version   string
-	Stats     string
+	Timestamp   time.Time
+	Version     string
+	CryptoStats string
 }
 
 func (m Metadata) Map() map[string]string {
 	return map[string]string{
-		MetaTimestampKey: fmt.Sprintf("%d", m.Timestamp.Unix()),
-		MetaVersionKey:   m.Version,
-		MetaStatsKey:     m.Stats,
+		MetaVersionKey:     m.Version,
+		MetaCryptoStatsKey: m.CryptoStats,
 	}
 }
 
@@ -158,6 +155,39 @@ func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, bool, 
 	}
 	sort.Ints(res)
 	return res, hasOriginal, nil
+}
+
+type HeadObject struct {
+	ContentLength int64
+	ContentType   string
+	LastModified  time.Time
+	Metadata      map[string]string
+}
+
+func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error) {
+	head, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.cfg.Bucket),
+		Key:    aws.String(key),
+	})
+
+	var nsk *types.NoSuchKey
+	var nf *types.NotFound
+
+	switch {
+	case errors.As(err, &nsk) || errors.As(err, &nf):
+		return HeadObject{}, ErrNotFound
+
+	case err != nil:
+		slog.ErrorContext(ctx, "`s3.HeadObject()` failed.", slog.String("error", err.Error()))
+		return HeadObject{}, err
+	}
+
+	return HeadObject{
+		ContentLength: *head.ContentLength,
+		ContentType:   *head.ContentType,
+		LastModified:  *head.LastModified,
+		Metadata:      head.Metadata,
+	}, nil
 }
 
 func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {

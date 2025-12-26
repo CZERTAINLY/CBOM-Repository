@@ -129,14 +129,13 @@ func TestStats1(t *testing.T) {
 	err := decoder.Decode(&bom)
 	require.NoError(t, err)
 
-	bomStats := service.BOMStats(context.Background(), &bom)
+	bomStats := service.CalculateCryptoStats(context.Background(), &bom)
 
-	require.Equal(t, 5, bomStats.Stats.CryptoAssets.Total)
-	require.Equal(t, 2, bomStats.Stats.CryptoAssets.Algo.Total)
-	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Cert.Total)
-	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Protocol.Total)
-	require.Equal(t, 1, bomStats.Stats.CryptoAssets.Related.Total)
-
+	require.Equal(t, 5, bomStats.CryptoAsset.Total)
+	require.Equal(t, 2, bomStats.CryptoAsset.Algo.Total)
+	require.Equal(t, 1, bomStats.CryptoAsset.Cert.Total)
+	require.Equal(t, 1, bomStats.CryptoAsset.Protocol.Total)
+	require.Equal(t, 1, bomStats.CryptoAsset.Related.Total)
 }
 
 func TestStatsComponentsNil(t *testing.T) {
@@ -159,12 +158,12 @@ func TestStatsComponentsNil(t *testing.T) {
 	err := decoder.Decode(&bom)
 	require.NoError(t, err)
 
-	bomStats := service.BOMStats(context.Background(), &bom)
+	bomStats := service.CalculateCryptoStats(context.Background(), &bom)
 
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Total)
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Algo.Total)
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Cert.Total)
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Protocol.Total)
-	require.Equal(t, 0, bomStats.Stats.CryptoAssets.Related.Total)
+	require.Equal(t, 0, bomStats.CryptoAsset.Total)
+	require.Equal(t, 0, bomStats.CryptoAsset.Algo.Total)
+	require.Equal(t, 0, bomStats.CryptoAsset.Cert.Total)
+	require.Equal(t, 0, bomStats.CryptoAsset.Protocol.Total)
+	require.Equal(t, 0, bomStats.CryptoAsset.Related.Total)
 
 }

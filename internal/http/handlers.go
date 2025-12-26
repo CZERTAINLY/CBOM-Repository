@@ -81,18 +81,7 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	urn := vars["urn"]
 
-	if urn == "" {
-		details.BadRequest(w,
-			"Missing `{urn}` path variable.",
-			map[string]any{"example": fmt.Sprintf("GET %s%s", s.cfg.Prefix, RouteBOMByURN)},
-		)
-		return
-	}
-	if !service.URNValid(urn) {
-		details.BadRequest(w,
-			"Invalid `{urn}`.",
-			map[string]any{"example": "urn:uuid:<uuid>"},
-		)
+	if !validateURNPathVariable(w, urn) {
 		return
 	}
 
@@ -117,6 +106,53 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json")
+	w.WriteHeader(http.StatusOK)
+	if err = json.NewEncoder(w).Encode(resp); err != nil {
+		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
+		return
+	}
+	slog.InfoContext(ctx, "Finished.")
+}
+
+func validateURNPathVariable(w http.ResponseWriter, urn string) bool {
+	if !service.URNValid(urn) {
+		details.BadRequest(w,
+			fmt.Sprintf("Path variable `{urn}` invalid: %q.", urn),
+			map[string]any{"example": "urn:uuid:<uuid>"},
+		)
+		return false
+	}
+	return true
+}
+
+func (s Server) URNVersions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	vars := mux.Vars(r)
+	urn := vars["urn"]
+
+	if !validateURNPathVariable(w, urn) {
+		return
+	}
+
+	slog.InfoContext(ctx, "Start.", slog.String("urn", urn))
+
+	resp, err := s.service.UrnVersions(ctx, urn)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrNotFound):
+			details.NotFound(w, "No versions found for requested serial number.")
+			return
+		}
+
+		details.Internal(w,
+			"Failed to get versions for requested serial number.",
+			map[string]any{
+				"error": err.Error(),
+			})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
