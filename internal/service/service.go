@@ -149,7 +149,7 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 	)
 
 	if strings.TrimSpace(version) == "" {
-		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersion()` to obtain the latest BOM version stored.")
+		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersions()` to obtain the latest BOM version stored.")
 		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, urn)
 		switch {
 		case errors.Is(err, store.ErrNotFound):
@@ -209,23 +209,22 @@ func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, err
 		return nil, err
 	}
 
-	res := []VersionRes{}
+	toProcess := []string{}
 	for _, cpy := range versions {
-		res = append(res, VersionRes{
-			Version: strconv.Itoa(cpy),
-		})
+		toProcess = append(toProcess, strconv.Itoa(cpy))
 	}
 	if hasOriginal {
-		res = append(res, VersionRes{
-			Version: "original",
-		})
+		toProcess = append(toProcess, "original")
 	}
-	for i := range res {
-		head, err := s.store.GetHeadObject(ctx, fmt.Sprintf("%s-%s", urn, res[i].Version))
+
+	res := []VersionRes{}
+	for _, cpy := range toProcess {
+		key := fmt.Sprintf("%s-%s", urn, cpy)
+		head, err := s.store.GetHeadObject(ctx, key)
 		switch {
 		case errors.Is(err, store.ErrNotFound):
-			slog.WarnContext(ctx, "Fetching HeadObject for key failed although version was previously returned by `store.GetObjectVersions()`. Skipping from result set.",
-				slog.String("key", fmt.Sprintf("%s-%s", urn, res[i].Version)), slog.String("version", res[i].Version))
+			slog.WarnContext(ctx, "Fetching HeadObject for key failed although it was previously returned by `store.GetObjectVersions()`. Skipping from result set.",
+				slog.String("key", key))
 			continue
 
 		case err != nil:
@@ -235,16 +234,20 @@ func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, err
 		cryptoStats, ok := head.Metadata[store.MetaCryptoStatsKey]
 		if !ok {
 			slog.WarnContext(ctx, fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
-				slog.String("object-key", fmt.Sprintf("%s-%s", urn, res[i].Version)))
+				slog.String("object-key", key))
 			continue
 		}
 
-		res[i].Timestamp = head.LastModified.Format(time.RFC3339)
-		if err := json.Unmarshal([]byte(cryptoStats), &res[i].CryptoStats); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling metadata key %q value failed.", store.MetaCryptoStatsKey),
-				slog.String("error", err.Error()), slog.String("object-key", fmt.Sprintf("%s-%s", urn, res[i].Version)))
+		item := VersionRes{
+			Version:   cpy,
+			Timestamp: head.LastModified.Format(time.RFC3339),
+		}
+		if err := json.Unmarshal([]byte(cryptoStats), &item.CryptoStats); err != nil {
+			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling value of metadata key %q failed.", store.MetaCryptoStatsKey),
+				slog.String("error", err.Error()), slog.String("object-key", key))
 			return res, errors.New("unmarshaling json failed")
 		}
+		res = append(res, item)
 	}
 	return res, nil
 }

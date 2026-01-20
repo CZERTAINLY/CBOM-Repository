@@ -55,7 +55,6 @@ type Store struct {
 }
 
 type Metadata struct {
-	Timestamp   time.Time
 	Version     string
 	CryptoStats string
 }
@@ -77,6 +76,9 @@ func New(cfg Config, s3Client S3Contract, s3Manager S3Manager) Store {
 	return s
 }
 
+// Search returns a slice of object keys that were created after unix timestamp `ts`
+// on success, error on failure. In case no keys were found for given timestamp,
+// Search returns (empty slice, nil).
 func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.Bucket),
@@ -180,6 +182,10 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 	case err != nil:
 		slog.ErrorContext(ctx, "`s3.HeadObject()` failed.", slog.String("error", err.Error()))
 		return HeadObject{}, err
+
+	// Assertion (suggested by Copilot): head is always non-nil
+	case head == nil:
+		return HeadObject{}, errors.New("`s3.HeadObject() returned nil result without error")
 	}
 
 	return HeadObject{

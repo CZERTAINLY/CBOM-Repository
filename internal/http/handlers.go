@@ -137,13 +137,12 @@ func (s Server) URNVersions(w http.ResponseWriter, r *http.Request) {
 	slog.InfoContext(ctx, "Start.", slog.String("urn", urn))
 
 	resp, err := s.service.UrnVersions(ctx, urn)
-	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrNotFound):
-			details.NotFound(w, "No versions found for requested serial number.")
-			return
-		}
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		details.NotFound(w, "No versions found for requested serial number.")
+		return
 
+	case err != nil:
 		details.Internal(w,
 			"Failed to get versions for requested serial number.",
 			map[string]any{

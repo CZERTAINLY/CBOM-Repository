@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
@@ -102,7 +101,6 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the original unchanged BOM
 	metaOriginal := store.Metadata{
-		Timestamp:   time.Now().UTC(),
 		Version:     "original",
 		CryptoStats: cryptoStats,
 	}
@@ -113,7 +111,6 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the modified BOM with serialNumber and version set
 	meta := store.Metadata{
-		Timestamp:   time.Now().UTC(),
 		Version:     fmt.Sprintf("%d", bom.Version),
 		CryptoStats: cryptoStats,
 	}
@@ -155,7 +152,6 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	}
 
 	meta := store.Metadata{
-		Timestamp:   time.Now().UTC(),
 		Version:     fmt.Sprintf("%d", bom.Version),
 		CryptoStats: cryptoStats,
 	}
@@ -191,7 +187,6 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 	}
 
 	meta := store.Metadata{
-		Timestamp:   time.Now().UTC(),
 		Version:     fmt.Sprintf("%d", bom.Version),
 		CryptoStats: cryptoStats,
 	}
