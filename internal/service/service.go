@@ -274,7 +274,7 @@ func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, err
 		return nil, err
 	}
 
-	toProcess := []string{}
+	var toProcess []string
 	for _, cpy := range versions {
 		toProcess = append(toProcess, strconv.Itoa(cpy))
 	}

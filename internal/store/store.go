@@ -223,7 +223,7 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 
 	// Assertion (suggested by Copilot): head is always non-nil
 	case head == nil:
-		return HeadObject{}, errors.New("`s3.HeadObject() returned nil result without error")
+		return HeadObject{}, errors.New("`s3.HeadObject()` returned nil result without error")
 	}
 
 	return HeadObject{
