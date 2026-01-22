@@ -23,6 +23,21 @@ type TotalStats struct {
 	Total int `json:"total"`
 }
 
+// CalculateCryptoStats analyzes a CycloneDX BOM and returns statistics about
+// cryptographic assets contained within it. The function iterates through all
+// components in the BOM and counts cryptographic assets by their type
+// (algorithm, certificate, protocol, or related crypto material).
+//
+// Components that are not of type ComponentTypeCryptographicAsset are skipped.
+// Components missing CryptoProperties are logged as warnings and skipped.
+//
+// Parameters:
+//   - ctx: Context for cancellation and logging
+//   - bom: The CycloneDX BOM to analyze
+//
+// Returns a CryptoStats struct containing aggregated counts of cryptographic
+// assets. If the BOM has no components or a nil Components field, a zero value
+// CryptoStats struct is returned.
 func CalculateCryptoStats(ctx context.Context, bom *cdx.BOM) CryptoStats {
 	var cryptoStats CryptoStats
 	if bom.Components == nil {

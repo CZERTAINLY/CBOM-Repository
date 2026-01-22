@@ -22,6 +22,33 @@ type BOMCreated struct {
 	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
+// UploadBOM processes and stores a CycloneDX BOM (Bill of Materials) document.
+// The function handles three distinct scenarios based on the BOM's serial number and version fields:
+//
+//  1. Missing serial number: Generates a new RFC-4122 compliant URN, sets version to 1,
+//     and stores both the original BOM and a modified version with the generated fields.
+//
+//  2. Valid serial number with invalid version (< 1): If a BOM with this serial number already
+//     exists, fetches existing versions for the serial number and assigns the next sequential
+//     version number, otherwise assigns verison 1. Stores the modified BOM with the updated
+//     version field.
+//
+//  3. Valid serial number and version: Verifies the BOM doesn't already exist and stores
+//     it as-is. Returns ErrAlreadyExists if a BOM with the same serial number and version
+//     already exists.
+//
+// Cryptographic asset statistics are calculated for all uploaded BOMs and stored
+// as metadata alongside the BOM document.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - rc: Reader containing the BOM document (will be closed by this function)
+//   - schemaVersion: Expected CycloneDX schema version (e.g., "1.6")
+//
+// Returns:
+//   - BOMCreated: Contains the serial number, version, and crypto statistics of the stored BOM
+//   - error: ErrValidation if validation fails, ErrAlreadyExists if the BOM already exists,
+//     or other errors from decoding, encoding, or storage operations
 func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
 
 	var buf bytes.Buffer

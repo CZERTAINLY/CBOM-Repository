@@ -76,9 +76,18 @@ func New(cfg Config, s3Client S3Contract, s3Manager S3Manager) Store {
 	return s
 }
 
-// Search returns a slice of object keys that were created after unix timestamp `ts`
-// on success, error on failure. In case no keys were found for given timestamp,
-// Search returns (empty slice, nil).
+// Search returns a list of all object keys in the S3 bucket that were modified
+// after the specified Unix timestamp. The search iterates through all objects
+// in the bucket using pagination and filters them based on their LastModified
+// time.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - ts: Unix timestamp (seconds since epoch) used as the lower bound for filtering
+//
+// Returns a slice of object keys (strings) and an error if the operation fails.
+// An empty slice is returned if no objects match the criteria or if the bucket
+// is empty.
 func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.Bucket),
@@ -105,6 +114,25 @@ func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
 	return res, nil
 }
 
+// GetObjectVersions retrieves all version numbers for a given object URN and
+// indicates whether an original version exists. The function lists all objects
+// in the S3 bucket with the specified URN prefix and parses their version
+// suffixes.
+//
+// Object keys are expected to follow the format "urn:uuid:<uuid>-<version>"
+// where version is either a numeric value or the literal string "original".
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - urn: The object URN prefix to search for (e.g., "urn:uuid:12345678-1234-1234-1234-123456789abc")
+//
+// Returns:
+//   - []int: A sorted slice of version numbers found for the object
+//   - bool: True if an "original" version exists, false otherwise
+//   - error: ErrNotFound if no objects match the URN, or other errors if the operation fails
+//
+// The function will return an error if any object key does not follow the expected
+// naming convention or if version suffixes cannot be parsed as integers.
 func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, bool, error) {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.cfg.Bucket),
@@ -166,6 +194,16 @@ type HeadObject struct {
 	Metadata      map[string]string
 }
 
+// GetHeadObject retrieves metadata for an object in S3 without downloading the
+// object's content. This is useful for checking object existence and obtaining
+// metadata such as size, content type, last modified time, and custom metadata.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - key: The S3 object key to retrieve metadata for
+//
+// Returns a HeadObject containing the object's metadata and an error if the
+// operation fails. Returns ErrNotFound if the object does not exist in the bucket.
 func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error) {
 	head, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
@@ -196,6 +234,14 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 	}, nil
 }
 
+// GetObject retrieves the complete contents of an object from S3 and returns
+// it as a byte slice.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - key: The S3 object key to retrieve
+//
+// Returns the object's contents as a byte slice and an error if the oper
 func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 	result, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
@@ -227,6 +273,16 @@ func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
+// KeyExists checks whether an object with the specified key exists in the S3
+// bucket without retrieving its contents.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - key: The S3 object key to check
+//
+// Returns true if the object exists, false if it does not exist, and an error
+// if the operation fails for reasons other than the object not being found
+// (e.g., network errors, permission issues).
 func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
 	_, err := s.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
@@ -246,6 +302,16 @@ func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
 	return false, err
 }
 
+// Upload stores an object in S3 with the specified key, metadata, and contents.
+// The object is uploaded with a SHA256 checksum for data integrity verification.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - key: The S3 object key under which to store the content
+//   - meta: Metadata to attach to the object (version and crypto stats)
+//   - contents: The byte slice containing the object's data to upload
+//
+// Returns an error if the upload operation fails.
 func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents []byte) error {
 	input := &s3.PutObjectInput{
 		Bucket:            aws.String(s.cfg.Bucket),
