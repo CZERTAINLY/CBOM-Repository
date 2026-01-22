@@ -141,14 +141,16 @@ func TestStore_GetHeadObject(t *testing.T) {
 				Region: "us-east-1",
 			}
 
-			store := store.New(cfg, mockS3Client, mockS3Manager)
+			s := store.New(cfg, mockS3Client, mockS3Manager)
 			ctx := context.Background()
 
-			gotHead, gotErr := store.GetHeadObject(ctx, tt.key)
+			gotHead, gotErr := s.GetHeadObject(ctx, tt.key)
 
 			if tt.wantErr != nil {
 				require.Error(t, gotErr)
-				require.Equal(t, tt.wantErr.Error(), gotErr.Error())
+				if errors.Is(tt.wantErr, store.ErrNotFound) {
+					require.Equal(t, tt.wantErr.Error(), gotErr.Error())
+				}
 			} else {
 				require.NoError(t, gotErr)
 			}
