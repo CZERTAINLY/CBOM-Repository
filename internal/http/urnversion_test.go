@@ -275,7 +275,7 @@ func TestServer_URNVersions(t *testing.T) {
 			}
 			server := New(cfg, svc, healthSvc)
 
-			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("%s%s", tt.prefix, RouteBOMByURN), nil)
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("%s%s", tt.prefix, RouteBOMVersions), nil)
 			req = mux.SetURLVars(req, map[string]string{"urn": tt.urn})
 			rec := httptest.NewRecorder()
 

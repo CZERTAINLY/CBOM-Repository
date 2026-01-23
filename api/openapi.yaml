@@ -134,34 +134,34 @@ paths:
                 $ref: "#/components/schemas/ProblemDetails"
 
   /v1/bom/{urn}/versions:
-  get:
-    summary: List available BOM versions
-    description: Returns all available versions of a BOM identified by its URN.
-    operationId: listBomVersions
-    tags:
-      - BOM
-    parameters:
-      - name: urn
-        in: path
-        required: true
-        description: URN of the BOM
-        schema:
-          type: string
-    responses:
-      '200':
-        description: Successful response with list of BOM versions
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/BomVersion'
-      '400':
-        description: Invalid URN supplied
-      '404':
-        description: BOM not found
-      '500':
-        description: Internal server error
+    get:
+      summary: List available BOM versions
+      description: Returns all available versions of a BOM identified by its URN.
+      operationId: listBomVersions
+      tags:
+        - BOM
+      parameters:
+        - name: urn
+          in: path
+          required: true
+          description: URN of the BOM
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response with list of BOM versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BomVersion'
+        '400':
+          description: Invalid URN supplied
+        '404':
+          description: BOM not found
+        '500':
+          description: Internal server error
 
   /v1/health:
     get:
@@ -376,82 +376,38 @@ components:
 
     CryptoStats:
       type: object
-      description: Cryptographic statistics
+      required:
+        - cryptoAssets
       properties:
-        assets:
+        cryptoAssets:
           $ref: '#/components/schemas/CryptoAssets'
-        algorithms:
-          $ref: '#/components/schemas/AlgorithmStats'
-      required: [assets, algorithms]
 
     CryptoAssets:
       type: object
-      description: Cryptographic assets breakdown
+      required:
+        - total
+        - algorithms
+        - certificates
+        - protocols
+        - relatedCryptoMaterials
+      properties:
+        total:
+          type: integer
+          example: 1
+        algorithms:
+          $ref: '#/components/schemas/CryptoAssetCount'
+        certificates:
+          $ref: '#/components/schemas/CryptoAssetCount'
+        protocols:
+          $ref: '#/components/schemas/CryptoAssetCount'
+        relatedCryptoMaterials:
+          $ref: '#/components/schemas/CryptoAssetCount'
+
+    CryptoAssetCount:
+      type: object
+      required:
+        - total
       properties:
         total:
           type: integer
           example: 0
-        certificates:
-          type: object
-          properties:
-            total:
-              type: integer
-              example: 0
-          required: [total]
-        keys:
-          type: object
-          properties:
-            total:
-              type: integer
-              example: 0
-            symmetric:
-              type: integer
-              example: 0
-            asymmetric:
-              type: integer
-              example: 0
-          required: [total, symmetric, asymmetric]
-        hashFunctions:
-          type: object
-          properties:
-            total:
-              type: integer
-              example: 0
-          required: [total]
-        signatureSchemes:
-          type: object
-          properties:
-            signatureSchemes:
-              type: integer
-              example: 0
-          required: [signatureSchemes]
-        keyAgreement:
-          type: object
-          properties:
-            keyAgreements:
-              type: integer
-              example: 0
-          required: [keyAgreements]
-      required: [total, certificates, keys, hashFunctions, signatureSchemes, keyAgreement]
-
-    AlgorithmStats:
-      type: object
-      description: Algorithm usage statistics
-      properties:
-        unique:
-          type: array
-          items:
-            type: string
-          example: ["AES"]
-        keySizes:
-          type: array
-          items:
-            type: integer
-          example: [128]
-        count:
-          type: integer
-          example: 1
-      required: [unique, keySizes, count]
-
-
-

@@ -101,7 +101,7 @@ type SearchRes struct {
 	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
-// Search retrieves all BOMs with a last modified timestamp greater than or equal to the specified value.
+// Search retrieves all BOMs with a last modified timestamp greater than the specified value.
 // The function queries the underlying store for matching BOMs and enriches each result with
 // cryptographic asset statistics extracted from object metadata.
 //

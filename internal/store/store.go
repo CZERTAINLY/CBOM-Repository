@@ -221,7 +221,7 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 		slog.ErrorContext(ctx, "`s3.HeadObject()` failed.", slog.String("error", err.Error()))
 		return HeadObject{}, err
 
-	// Assertion (suggested by Copilot): head is always non-nil
+	// Defensive check: handle an unexpected nil HeadObject result when no error is reported.
 	case head == nil:
 		return HeadObject{}, errors.New("`s3.HeadObject()` returned nil result without error")
 	}
@@ -235,7 +235,8 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 }
 
 // GetObject retrieves the complete contents of an object from S3 and returns
-// it as a byte slice.
+// it as a byte slice. Returns ErrNotFound if the object does not exist
+// in the bucket.
 //
 // Parameters:
 //   - ctx: Context for cancellation, deadlines and additional slog fields.

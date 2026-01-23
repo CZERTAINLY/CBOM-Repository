@@ -30,7 +30,7 @@ type BOMCreated struct {
 //
 //  2. Valid serial number with invalid version (< 1): If a BOM with this serial number already
 //     exists, fetches existing versions for the serial number and assigns the next sequential
-//     version number, otherwise assigns verison 1. Stores the modified BOM with the updated
+//     version number, otherwise assigns version 1. Stores the modified BOM with the updated
 //     version field.
 //
 //  3. Valid serial number and version: Verifies the BOM doesn't already exist and stores
