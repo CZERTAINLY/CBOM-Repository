@@ -300,7 +300,9 @@ components:
           type: integer
           description: CycloneDX integer version number for the BOM document
           example: 1
-      required: [serialNumber, version]
+        cryptoStats:
+          $ref: '#/components/schemas/CryptoStats'
+      required: [serialNumber, version, cryptoStats]
       additionalProperties: false
 
     BomVersion:
