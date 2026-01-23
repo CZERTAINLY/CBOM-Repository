@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
@@ -39,6 +41,25 @@ type Service struct {
 	jsonSchemas map[string]*jss.Schema
 }
 
+// New creates and initializes a new Service instance with the provided store.
+// During initialization, it loads and compiles JSON schemas for all supported
+// CycloneDX BOM versions from defined embedded schema files.
+//
+// The function reads schema files from the embedded filesystem and compiles them
+// into validators that will be used to validate uploaded BOMs. If any schema file
+// cannot be read or compiled, the function returns an error and the Service will
+// not be initialized.
+//
+// Supported schema versions are defined in the versionToEmbeddedFileMapping variable.
+// To add support for a new CycloneDX version, place the schema file in the schemas
+// subdirectory and update the mapping.
+//
+// Parameters:
+//   - store: The storage backend used for persisting and retrieving BOM documents
+//
+// Returns:
+//   - Service: An initialized service ready to handle BOM operations
+//   - error: Non-nil if any schema file cannot be read or compiled, nil otherwise
 func New(store store.Store) (Service, error) {
 
 	jsonSchemas := make(map[string]*jss.Schema)
@@ -74,10 +95,23 @@ func (s Service) VersionSupported(version string) bool {
 }
 
 type SearchRes struct {
-	URN     string `json:"serialNumber"`
-	Version string `json:"version"`
+	SerialNumber string      `json:"serialNumber"`
+	Version      string      `json:"version"`
+	Timestamp    string      `json:"timestamp"`
+	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
+// Search retrieves all BOMs with a last modified timestamp greater than the specified value.
+// The function queries the underlying store for matching BOMs and enriches each result with
+// cryptographic asset statistics extracted from object metadata.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines, and additional slog fields.
+//   - ts: Unix timestamp (seconds since epoch); only BOMs modified after this time are returned
+//
+// Returns:
+//   - []SearchRes: Slice of search results containing serial number, version, timestamp, and crypto statistics
+//   - error: Non-nil if the store query fails, key format is invalid, or JSON unmarshaling fails
 func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 	res := []SearchRes{}
 
@@ -101,14 +135,61 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 				slog.String("key", cpy), slog.String("expected-format", "urn:uuid:<uuid>-<version>"))
 			return nil, errors.New("unexpected key returned from store")
 		}
+
+		head, err := s.store.GetHeadObject(ctx, cpy)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			slog.WarnContext(ctx, fmt.Sprintf("Fetching HeadObject for key %q failed although version was previously returned by `store.Search()`. Skipping from result set.", cpy))
+			continue
+
+		case err != nil:
+			return nil, err
+		}
+
+		cryptoStatsValue, ok := head.Metadata[store.MetaCryptoStatsKey]
+		if !ok {
+			slog.WarnContext(ctx,
+				fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
+				slog.String("object-key", cpy))
+			continue
+		}
+
+		var cryptoStats CryptoStats
+		if err := json.Unmarshal([]byte(cryptoStatsValue), &cryptoStats); err != nil {
+			slog.ErrorContext(ctx,
+				fmt.Sprintf("Unmarshaling metadata key %q value failed.", store.MetaCryptoStatsKey),
+				slog.String("error", err.Error()), slog.String("object-key", cpy))
+			return res, errors.New("unmarshaling json failed")
+		}
+
 		res = append(res, SearchRes{
-			URN:     cpy[:idx],
-			Version: cpy[idx+1:],
+			SerialNumber: cpy[:idx],
+			Version:      cpy[idx+1:],
+			Timestamp:    head.LastModified.Format(time.RFC3339),
+			CryptoStats:  cryptoStats,
 		})
 	}
 	return res, nil
 }
 
+// GetBOMByUrn retrieves a BOM document by its URN and version.
+//
+// The function returns the BOM as a map to preserve the original JSON structure
+// and allow flexible handling of different CycloneDX schema versions.
+//
+// Version Selection:
+//   - If version is specified: Retrieves that specific version
+//   - If version is empty: Automatically selects and retrieves the latest version
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines, and additional slog fields
+//   - urn: The URN identifier of the BOM (format: urn:uuid:<uuid>)
+//   - version: The specific version to retrieve, or empty string for latest version
+//
+// Returns:
+//   - map[string]interface{}: The BOM document as a JSON-compatible map
+//   - error: Returns ErrNotFound if the URN or version doesn't exist,
+//     or other errors from the store or JSON unmarshaling
 func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[string]interface{}, error) {
 	ctx = log.ContextAttrs(ctx,
 		slog.String("urn", urn),
@@ -116,7 +197,7 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 	)
 
 	if strings.TrimSpace(version) == "" {
-		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersion()` to obtain the latest BOM version stored.")
+		slog.DebugContext(ctx, "Version is empty, calling `store.GetObjectVersions()` to obtain the latest BOM version stored.")
 		versions, hasOriginal, err := s.store.GetObjectVersions(ctx, urn)
 		switch {
 		case errors.Is(err, store.ErrNotFound):
@@ -154,6 +235,86 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 	}
 
 	return bomMap, nil
+}
+
+type VersionRes struct {
+	Version     string      `json:"version"`
+	Timestamp   string      `json:"timestamp"`
+	CryptoStats CryptoStats `json:"cryptoStats"`
+}
+
+// UrnVersions retrieves all available versions of a BOM identified by its URN.
+// The function returns some metadata for each version including the version
+// identifier, last modified timestamp, and cryptographic asset statistics.
+//
+// The returned slice includes all numbered versions (e.g., "1", "2", "3") and
+// may also include an "original" version if one exists in the store. Versions
+// that exist in the store but are missing required metadata (such as crypto
+// statistics) are logged as warnings and excluded from the results.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines, and additional slog fields
+//   - urn: The URN identifier of the BOM (format: urn:uuid:<uuid>)
+//
+// Returns:
+//   - []VersionRes: Slice of versions, some metadata and crypto statistics
+//   - error: Returns ErrNotFound if the URN doesn't exist, or other errors
+//     from the store or JSON unmarshaling
+func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, error) {
+	ctx = log.ContextAttrs(ctx,
+		slog.String("urn", urn),
+	)
+
+	versions, hasOriginal, err := s.store.GetObjectVersions(ctx, urn)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return nil, ErrNotFound
+
+	case err != nil:
+		return nil, err
+	}
+
+	var toProcess []string
+	for _, cpy := range versions {
+		toProcess = append(toProcess, strconv.Itoa(cpy))
+	}
+	if hasOriginal {
+		toProcess = append(toProcess, "original")
+	}
+
+	res := []VersionRes{}
+	for _, cpy := range toProcess {
+		key := fmt.Sprintf("%s-%s", urn, cpy)
+		head, err := s.store.GetHeadObject(ctx, key)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			slog.WarnContext(ctx, "Fetching HeadObject for key failed although it was previously returned by `store.GetObjectVersions()`. Skipping from result set.",
+				slog.String("key", key))
+			continue
+
+		case err != nil:
+			return nil, err
+		}
+
+		cryptoStats, ok := head.Metadata[store.MetaCryptoStatsKey]
+		if !ok {
+			slog.WarnContext(ctx, fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
+				slog.String("object-key", key))
+			continue
+		}
+
+		item := VersionRes{
+			Version:   cpy,
+			Timestamp: head.LastModified.Format(time.RFC3339),
+		}
+		if err := json.Unmarshal([]byte(cryptoStats), &item.CryptoStats); err != nil {
+			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling value of metadata key %q failed.", store.MetaCryptoStatsKey),
+				slog.String("error", err.Error()), slog.String("object-key", key))
+			return res, errors.New("unmarshaling json failed")
+		}
+		res = append(res, item)
+	}
+	return res, nil
 }
 
 // URNValid returns true if `urn` is a valid URN conforming to RFC-4122.

@@ -10,6 +10,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// ConnectS3 establishes a connection to an S3-compatible object storage service and returns
+// an S3 client and uploader. It configures the client with the provided credentials, region,
+// and optional endpoint settings. The function verifies connectivity by performing a HeadBucket
+// operation on the specified bucket.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - cfg: Configuration containing AWS credentials, region, bucket name, and optional endpoint settings
+//
+// Returns:
+//   - *s3.Client: Configured S3 client for performing S3 operations
+//   - *manager.Uploader: Uploader for efficient multi-part uploads
+//   - error: Any error encountered during configuration or connection verification
 func ConnectS3(ctx context.Context, cfg Config) (*s3.Client, *manager.Uploader, error) {
 	s3cfg, err := config.LoadDefaultConfig(
 		ctx,

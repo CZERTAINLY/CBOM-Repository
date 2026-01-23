@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"time"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
@@ -18,11 +17,38 @@ import (
 )
 
 type BOMCreated struct {
-	SerialNumber string   `json:"serialNumber"`
-	Version      int      `json:"version"`
-	SimpleStats  BomStats `json:"stats"`
+	SerialNumber string      `json:"serialNumber"`
+	Version      int         `json:"version"`
+	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
+// UploadBOM processes and stores a CycloneDX BOM (Bill of Materials) document.
+// The function handles three distinct scenarios based on the BOM's serial number and version fields:
+//
+//  1. Missing serial number: Generates a new RFC-4122 compliant URN, sets version to 1,
+//     and stores both the original BOM and a modified version with the generated fields.
+//
+//  2. Valid serial number with invalid version (< 1): If a BOM with this serial number already
+//     exists, fetches existing versions for the serial number and assigns the next sequential
+//     version number, otherwise assigns version 1. Stores the modified BOM with the updated
+//     version field.
+//
+//  3. Valid serial number and version: Verifies the BOM doesn't already exist and stores
+//     it as-is. Returns ErrAlreadyExists if a BOM with the same serial number and version
+//     already exists.
+//
+// Cryptographic asset statistics are calculated for all uploaded BOMs and stored
+// as metadata alongside the BOM document.
+//
+// Parameters:
+//   - ctx: Context for cancellation, deadlines and additional slog fields.
+//   - rc: Reader containing the BOM document (will be closed by this function)
+//   - schemaVersion: Expected CycloneDX schema version (e.g., "1.6")
+//
+// Returns:
+//   - BOMCreated: Contains the serial number, version, and crypto statistics of the stored BOM
+//   - error: ErrValidation if validation fails, ErrAlreadyExists if the BOM already exists,
+//     or other errors from decoding, encoding, or storage operations
 func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
 
 	var buf bytes.Buffer
@@ -55,8 +81,8 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		return BOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
 	}
 
-	bomStats := BOMStats(ctx, &bom)
-	b, err := json.Marshal(bomStats)
+	cryptoStats := CalculateCryptoStats(ctx, &bom)
+	b, err := json.Marshal(cryptoStats)
 	if err != nil {
 		return BOMCreated{}, fmt.Errorf("`json.Marshal()` failed: %w", err)
 	}
@@ -75,12 +101,12 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		retVal, retErr = s.uploadCaseSNValidVersionValid(ctx, bom, buf, string(b))
 	}
 	if retErr == nil {
-		retVal.SimpleStats = bomStats
+		retVal.CryptoStats = cryptoStats
 	}
 	return retVal, retErr
 }
 
-func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, stats string) (BOMCreated, error) {
+func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, cryptoStats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM does not have serial number specified - generating a new one.")
 	// serial number is missing, so we're going to generate a unique new one,
 	// that means this will be version 1, even if something else was set
@@ -102,9 +128,8 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the original unchanged BOM
 	metaOriginal := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   "original",
-		Stats:     stats,
+		Version:     "original",
+		CryptoStats: cryptoStats,
 	}
 	if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, orig.Bytes()); err != nil {
 		return BOMCreated{}, err
@@ -113,9 +138,8 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the modified BOM with serialNumber and version set
 	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   fmt.Sprintf("%d", bom.Version),
-		Stats:     stats,
+		Version:     fmt.Sprintf("%d", bom.Version),
+		CryptoStats: cryptoStats,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -136,7 +160,7 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 	}, nil
 }
 
-func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM, stats string) (BOMCreated, error) {
+func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BOM, cryptoStats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM has only serial number specified - fetching the latest version")
 	versions, hasOriginal, err := s.store.GetObjectVersions(ctx, bom.SerialNumber)
 	switch {
@@ -155,9 +179,8 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	}
 
 	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   fmt.Sprintf("%d", bom.Version),
-		Stats:     stats,
+		Version:     fmt.Sprintf("%d", bom.Version),
+		CryptoStats: cryptoStats,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -176,7 +199,7 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	}, nil
 }
 
-func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, stats string) (BOMCreated, error) {
+func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM, orig bytes.Buffer, cryptoStats string) (BOMCreated, error) {
 	slog.DebugContext(ctx, "BOM has serial number and version specified.")
 	// let's make sure it doesn't exist already
 	exists, err := s.store.KeyExists(ctx, uploadKey(bom.SerialNumber, bom.Version))
@@ -191,9 +214,8 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 	}
 
 	meta := store.Metadata{
-		Timestamp: time.Now().UTC(),
-		Version:   fmt.Sprintf("%d", bom.Version),
-		Stats:     stats,
+		Version:     fmt.Sprintf("%d", bom.Version),
+		CryptoStats: cryptoStats,
 	}
 
 	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, orig.Bytes()); err != nil {

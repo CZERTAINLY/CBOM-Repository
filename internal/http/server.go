@@ -19,6 +19,7 @@ const (
 	V1Prefix         = "/v1"
 	RouteBOM         = V1Prefix + "/bom"
 	RouteBOMByURN    = RouteBOM + "/{urn}"
+	RouteBOMVersions = RouteBOMByURN + "/versions"
 	RouteHealth      = V1Prefix + "/health"
 	RouteHealthLive  = RouteHealth + "/liveness"
 	RouteHealthReady = RouteHealth + "/readiness"
@@ -56,11 +57,14 @@ func (s *Server) Handler() *mux.Router {
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload).Methods(http.MethodPost)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Search).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOMByURN), s.GetByURN).Methods(http.MethodGet)
+	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOMVersions), s.URNVersions).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealth), s.HealthHandler).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealthLive), s.LivenessHandler).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealthReady), s.ReadinessHandler).Methods(http.MethodGet)
 
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slog.Debug("Received an HTTP request for an unmapped path and method.",
+			slog.String("path", r.URL.Path), slog.String("method", r.Method))
 		details.NotFound(w,
 			fmt.Sprintf("There is no handler registered for path: %s, method: %s",
 				r.URL.Path, r.Method,
