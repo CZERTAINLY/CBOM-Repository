@@ -207,6 +207,8 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 			return nil, err
 		}
 
+		// Invariant: A BOM that has an `original` version, it also MUST have at least one more version that
+		// is equal to `1`.
 		version = fmt.Sprintf("%d", versions[len(versions)-1])
 		slog.DebugContext(ctx, "Latest version selected.", slog.Group("getObjectVersionsResult",
 			slog.Any("all-versions", versions),

@@ -86,7 +86,8 @@ func TestStoreUpload(t *testing.T) {
 			require.NoError(t, cdx.NewBOMEncoder(&buf, cdx.BOMFileFormatJSON).Encode(&okCBOM))
 
 			meta := store.Metadata{
-				Version: "1",
+				Version:     "1",
+				CryptoStats: "{}",
 			}
 			err := s.Upload(context.Background(), tc.key, meta, []byte("some bytes"))
 			if tc.wantErr {

@@ -18,7 +18,7 @@ This project is currently under active development.
 ## API Endpoints
 
 A summary of the available endpoints and methods are below. For the complete specification please see [OpenAPI Spec](./api/openapi.yaml).
-Please note that HTTP API Paths have an addition default prefix `/api`. You can change it by setting the environment variable `APP_HTTP_PREFIX`.
+Please note that HTTP API Paths have an additional default prefix `/api`. You can change it by setting the environment variable `APP_HTTP_PREFIX`.
 
 | Path | HTTP Method | Required Params | Optional Params | Description |
 |:-----|:------------|:----------------|:----------------|:------------|
