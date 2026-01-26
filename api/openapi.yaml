@@ -290,6 +290,9 @@ components:
           example: "1"
         timestamp:
           type: string
+          format: date-time
+          description: RFC 3339 timestamp when this BOM entry was created
+          example: 2026-01-25T21:35:05Z"
         cryptoStats:
           $ref: '#/components/schemas/CryptoStats'
 
