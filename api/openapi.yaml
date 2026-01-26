@@ -155,7 +155,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/BomVersion'
+                  $ref: '#/components/schemas/BOMVersion'
         '400':
           description: Invalid URN supplied
         '404':
@@ -277,6 +277,8 @@ components:
       required:
         - serialNumber
         - version
+        - timestamp
+        - cryptoStats
       properties:
         serialNumber:
           type: string
@@ -286,6 +288,13 @@ components:
           type: string
           description: BOM Version - number or `original` string
           example: "1"
+        timestamp:
+          type: string
+          format: date-time
+          description: RFC 3339 timestamp when this BOM entry was created
+          example: "2026-01-25T21:35:05Z"
+        cryptoStats:
+          $ref: '#/components/schemas/CryptoStats'
 
     BOMCreateResponse:
       $schema: https://json-schema.org/draft/2020-12/schema
@@ -305,7 +314,7 @@ components:
       required: [serialNumber, version, cryptoStats]
       additionalProperties: false
 
-    BomVersion:
+    BOMVersion:
       type: object
       required:
         - version

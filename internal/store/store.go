@@ -242,7 +242,8 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 //   - ctx: Context for cancellation, deadlines and additional slog fields.
 //   - key: The S3 object key to retrieve
 //
-// Returns the object's contents as a byte slice and an error if the oper
+// Returns the object's contents as a byte slice and an error if the operation
+// fails.
 func (s Store) GetObject(ctx context.Context, key string) ([]byte, error) {
 	result, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.cfg.Bucket),
