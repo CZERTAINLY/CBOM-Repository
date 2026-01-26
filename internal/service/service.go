@@ -205,14 +205,6 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 
 		case err != nil:
 			return nil, err
-
-		case len(versions) == 0:
-			// this shouldn't happen:
-			// a) there is an invariant: each time version "original" is stored, a version 1 is always stored as well,
-			//    therefore it is not possible for any given `urn` to only have version "original"
-			// b) `store.GetObjectVersions()` should return `store.ErrNotFound` when there are no objects with given serial number (`urn`)
-			slog.ErrorContext(ctx, "Failed assertion: `store.GetObjectVersions()` returned an empty slice and not `store.ErrNotFound` error.")
-			return nil, ErrNotFound
 		}
 
 		version = fmt.Sprintf("%d", versions[len(versions)-1])
