@@ -111,11 +111,8 @@ paths:
             example: 1
       responses:
         '200':
-          description: Requested BOM with statistics
+          description: Requested BOM
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BOMResponse'
             application/vnd.cyclonedx+json:
               schema:
                 type: string
@@ -360,30 +357,6 @@ components:
           description: A URI reference that identifies the specific occurrence of the problem.
           example: "urn:uuid:4b96f3f7-0c2a-43f7-9c0a-7b0b6a3e2a61"
       additionalProperties: true
-
-    BOMResponse:
-      type: object
-      description: Response containing BOM metadata and statistics
-      properties:
-        serialNumber:
-          type: string
-          description: CycloneDX serial number (URN, RFC-4122)
-          example: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
-        version:
-          type: integer
-          description: CycloneDX integer version number for the BOM document
-          example: 2
-        stats:
-          $ref: '#/components/schemas/BOMStats'
-      required: [serialNumber, version, stats]
-
-    BOMStats:
-      type: object
-      description: Statistical information about the BOM
-      properties:
-        cryptoStats:
-          $ref: '#/components/schemas/CryptoStats'
-      required: [cryptoStats]
 
     CryptoStats:
       type: object
