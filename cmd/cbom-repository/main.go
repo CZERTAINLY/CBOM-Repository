@@ -28,14 +28,14 @@ func main() {
 	slog.Info("Starting service 'CBOM-Repository'.", slog.String("version", version))
 	slog.Debug("Service configuration read from environment variables.")
 
-	s3Client, s3Uploader, err := store.ConnectS3(context.Background(), cfg.Store)
+	s3Client, s3Manager, err := store.ConnectS3(context.Background(), cfg.Store)
 	if err != nil {
 		slog.Error("Connecting to backend store failed.", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	slog.Debug("Connected to backend store.")
 
-	store := store.New(cfg.Store, s3Client, s3Uploader)
+	store := store.New(cfg.Store, s3Client, s3Manager)
 	svc, err := service.New(store)
 	if err != nil {
 		slog.Error("Initializing service layer failed.", slog.String("error", err.Error()))

@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	managerTypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -36,7 +37,7 @@ type S3Contract interface {
 }
 
 type S3Manager interface {
-	Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
+	UploadObject(ctx context.Context, input *manager.UploadObjectInput, opts ...func(*manager.Options)) (*manager.UploadObjectOutput, error)
 }
 
 type Config struct {
@@ -315,15 +316,15 @@ func (s Store) KeyExists(ctx context.Context, key string) (bool, error) {
 //
 // Returns an error if the upload operation fails.
 func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents []byte) error {
-	input := &s3.PutObjectInput{
+	input := &manager.UploadObjectInput{
 		Bucket:            aws.String(s.cfg.Bucket),
 		Key:               aws.String(key),
 		Body:              bytes.NewReader(contents),
 		Metadata:          meta.Map(),
-		ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
+		ChecksumAlgorithm: managerTypes.ChecksumAlgorithmSha256,
 		ContentType:       aws.String("application/json"),
 	}
-	_, err := s.s3Manager.Upload(ctx, input)
+	_, err := s.s3Manager.UploadObject(ctx, input)
 	if err != nil {
 		slog.ErrorContext(ctx, "`s3.manager.Upload()` failed.", slog.String("error", err.Error()))
 		return err

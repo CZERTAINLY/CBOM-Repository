@@ -11,8 +11,7 @@ import (
 	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -45,13 +44,13 @@ func TestStoreUpload(t *testing.T) {
 				s3Mock := mockS3.NewMockS3Contract(mockCtrl)
 				s3Manager := mockS3.NewMockS3Manager(mockCtrl)
 
-				s3Manager.EXPECT().Upload(
+				s3Manager.EXPECT().UploadObject(
 					gomock.Any(),
-					gomock.AssignableToTypeOf(&s3.PutObjectInput{}),
-				).DoAndReturn(func(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*manager.UploadOutput, error) {
+					gomock.AssignableToTypeOf(&manager.UploadObjectInput{}),
+				).DoAndReturn(func(_ context.Context, in *manager.UploadObjectInput, _ ...func(*manager.Options)) (*manager.UploadObjectOutput, error) {
 					require.Equal(t, bucketName, *in.Bucket)
 					require.Equal(t, key, *in.Key)
-					return &manager.UploadOutput{}, nil
+					return &manager.UploadObjectOutput{}, nil
 				})
 
 				return store.New(store.Config{Bucket: bucketName}, s3Mock, s3Manager)
@@ -64,13 +63,13 @@ func TestStoreUpload(t *testing.T) {
 				s3Mock := mockS3.NewMockS3Contract(mockCtrl)
 				s3Manager := mockS3.NewMockS3Manager(mockCtrl)
 
-				s3Manager.EXPECT().Upload(
+				s3Manager.EXPECT().UploadObject(
 					gomock.Any(),
-					gomock.AssignableToTypeOf(&s3.PutObjectInput{}),
-				).DoAndReturn(func(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*manager.UploadOutput, error) {
+					gomock.AssignableToTypeOf(&manager.UploadObjectInput{}),
+				).DoAndReturn(func(_ context.Context, in *manager.UploadObjectInput, _ ...func(*manager.Options)) (*manager.UploadObjectOutput, error) {
 					require.Equal(t, bucketName, *in.Bucket)
 					require.Equal(t, key, *in.Key)
-					return &manager.UploadOutput{}, errors.New("abc")
+					return &manager.UploadObjectOutput{}, errors.New("abc")
 				})
 
 				return store.New(store.Config{Bucket: bucketName}, s3Mock, s3Manager)
