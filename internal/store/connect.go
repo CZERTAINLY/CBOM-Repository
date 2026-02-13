@@ -21,7 +21,7 @@ import (
 //
 // Returns:
 //   - *s3.Client: Configured S3 client for performing S3 operations
-//   - *manager.Uploader: Uploader for efficient multi-part uploads
+//   - *manager.Client: transfer manager.Client for efficient multi-part uploads
 //   - error: Any error encountered during configuration or connection verification
 func ConnectS3(ctx context.Context, cfg Config) (*s3.Client, *manager.Client, error) {
 	s3cfg, err := config.LoadDefaultConfig(

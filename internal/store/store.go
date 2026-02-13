@@ -326,7 +326,7 @@ func (s Store) Upload(ctx context.Context, key string, meta Metadata, contents [
 	}
 	_, err := s.s3Manager.UploadObject(ctx, input)
 	if err != nil {
-		slog.ErrorContext(ctx, "`s3.manager.Upload()` failed.", slog.String("error", err.Error()))
+		slog.ErrorContext(ctx, "`s3.manager.UploadObject()` failed.", slog.String("error", err.Error()))
 		return err
 	}
 
