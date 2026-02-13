@@ -256,7 +256,7 @@ func TestUpload(t *testing.T) {
 			body:        validBOM,
 			setupMocks: func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {
 				s3c.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(nil, &types.NotFound{})
-				s3m.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(nil, nil)
+				s3m.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(nil, nil)
 			},
 			expectedStatus:     http.StatusCreated,
 			expectedInResponse: "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",

@@ -6,7 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -21,9 +21,9 @@ import (
 //
 // Returns:
 //   - *s3.Client: Configured S3 client for performing S3 operations
-//   - *manager.Uploader: Uploader for efficient multi-part uploads
+//   - *manager.Client: transfer manager.Client for efficient multi-part uploads
 //   - error: Any error encountered during configuration or connection verification
-func ConnectS3(ctx context.Context, cfg Config) (*s3.Client, *manager.Uploader, error) {
+func ConnectS3(ctx context.Context, cfg Config) (*s3.Client, *manager.Client, error) {
 	s3cfg, err := config.LoadDefaultConfig(
 		ctx,
 		config.WithRegion(cfg.Region),
@@ -55,5 +55,5 @@ func ConnectS3(ctx context.Context, cfg Config) (*s3.Client, *manager.Uploader, 
 		return nil, nil, err
 	}
 
-	return s3Client, manager.NewUploader(s3Client), nil
+	return s3Client, manager.New(s3Client), nil
 }

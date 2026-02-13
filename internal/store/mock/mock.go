@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	transfermanager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -166,22 +166,22 @@ func (m *MockS3Manager) EXPECT() *MockS3ManagerMockRecorder {
 	return m.recorder
 }
 
-// Upload mocks base method.
-func (m *MockS3Manager) Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+// UploadObject mocks base method.
+func (m *MockS3Manager) UploadObject(ctx context.Context, input *transfermanager.UploadObjectInput, opts ...func(*transfermanager.Options)) (*transfermanager.UploadObjectOutput, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, input}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "Upload", varargs...)
-	ret0, _ := ret[0].(*manager.UploadOutput)
+	ret := m.ctrl.Call(m, "UploadObject", varargs...)
+	ret0, _ := ret[0].(*transfermanager.UploadObjectOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Upload indicates an expected call of Upload.
-func (mr *MockS3ManagerMockRecorder) Upload(ctx, input any, opts ...any) *gomock.Call {
+// UploadObject indicates an expected call of UploadObject.
+func (mr *MockS3ManagerMockRecorder) UploadObject(ctx, input any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, input}, opts...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upload", reflect.TypeOf((*MockS3Manager)(nil).Upload), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UploadObject", reflect.TypeOf((*MockS3Manager)(nil).UploadObject), varargs...)
 }

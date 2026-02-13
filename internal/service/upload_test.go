@@ -11,7 +11,7 @@ import (
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
 	cdx "github.com/CycloneDX/cyclonedx-go"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/kaptinlin/jsonschema"
@@ -197,7 +197,7 @@ func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
 	// HeadObject returns NotFound -> no key exists
 	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
 	// Upload called twice
-	s3Manager.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(&manager.UploadOutput{}, nil).Times(2)
+	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
 
 	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(false, "", 0, false)))
 	res, err := svc.UploadBOM(context.Background(), rc, "1.6")
@@ -273,7 +273,7 @@ func TestUploadBOM_VersionIncrementHasOriginal(t *testing.T) {
 	}, nil)
 
 	// Upload should be called once for modified version
-	s3Manager.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(&manager.UploadOutput{}, nil).Times(1)
+	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(1)
 
 	// Prepare BOM with serial only and no version (version defaults to 0 -> <1)
 	rc := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\"\n}"))
@@ -298,7 +298,7 @@ func TestUploadBOM_SerialVersionSuccess(t *testing.T) {
 	// HeadObject returns NotFound -> key does not exist
 	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{})
 	// Upload will be called once to store original BOM
-	s3Manager.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(&manager.UploadOutput{}, nil).Times(1)
+	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(1)
 
 	serial := "urn:uuid:550e8400-e29b-11d4-a716-446655440000"
 	rc := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": 3\n}"))
