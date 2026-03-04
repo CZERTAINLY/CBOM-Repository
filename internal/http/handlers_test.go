@@ -306,12 +306,13 @@ func TestUpload(t *testing.T) {
 
 			cfg := Config{Port: 8080, Prefix: "/api", MaxBodySize: tt.maxBodySize}
 			server := New(cfg, svc, healthSvc)
+			router := server.Handler()
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", strings.NewReader(tt.body))
 			req.Header.Set(HeaderContentType, tt.contentType)
 			w := httptest.NewRecorder()
 
-			server.Upload(w, req)
+			router.ServeHTTP(w, req)
 
 			require.Equal(t, tt.expectedStatus, w.Code)
 

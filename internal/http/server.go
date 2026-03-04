@@ -55,7 +55,11 @@ func (s *Server) Handler() *mux.Router {
 
 	r.Use(httpInfoContext)
 
-	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload).Methods(http.MethodPost)
+	uploadRouter := r.Methods(http.MethodPost).Subrouter()
+	uploadRouter.Use(s.MaxBodySizeMiddleware)
+	uploadRouter.Use(s.BOMValidationMiddleware)
+	uploadRouter.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload)
+
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Search).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOMByURN), s.GetByURN).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOMVersions), s.URNVersions).Methods(http.MethodGet)
@@ -143,6 +147,40 @@ func httpInfoContext(next http.Handler) http.Handler {
 
 		// Pass updated request into chain
 		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) MaxBodySizeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.MaxBodySize > 0 {
+			r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxBodySize)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) BOMValidationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Assert content type and optional version
+		contentType := r.Header.Get(HeaderContentType)
+		ok, version := CheckContentType(contentType)
+		if !ok {
+			details.UnsupportedMediaType(w,
+				fmt.Sprintf("Content type %s not allowed for %s method %s", contentType, r.URL.Path, r.Method),
+				[]string{"application/vnd.cyclonedx+json"})
+			return
+		}
+
+		if !s.service.VersionSupported(version) {
+			details.BadRequest(w,
+				fmt.Sprintf("Version %s not supported", version),
+				map[string]any{"supported-versions": s.service.SupportedVersion()},
+			)
+			return
+		}
+
+		r.Header.Set("X-BOM-Version", version)
 		next.ServeHTTP(w, r)
 	})
 }

@@ -18,29 +18,9 @@ import (
 func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if h.cfg.MaxBodySize > 0 {
-		r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxBodySize)
-	}
-
-	// Assert content type and optional version
-	ok, version := CheckContentType(r.Header.Get(HeaderContentType))
-	if !ok {
-		details.UnsupportedMediaType(w,
-			fmt.Sprintf("Content type %s not allowed for %s method %s", r.Header.Get(HeaderContentType), r.URL.Path, r.Method),
-			[]string{"application/vnd.cyclonedx+json"})
-		return
-	}
-
-	if !h.service.VersionSupported(version) {
-		details.BadRequest(w,
-			fmt.Sprintf("Version %s not supported", version),
-			map[string]any{"supported-versions": h.service.SupportedVersion()},
-		)
-		return
-	}
-
 	slog.InfoContext(ctx, "Start.")
 
+	version := r.Header.Get("X-BOM-Version")
 	resp, err := h.service.UploadBOM(ctx, r.Body, version)
 	if err != nil {
 		var maxBytesErr *http.MaxBytesError
