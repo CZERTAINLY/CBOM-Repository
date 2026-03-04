@@ -232,6 +232,7 @@ func TestUpload(t *testing.T) {
 		name               string
 		contentType        string
 		body               string
+		maxBodySize        int64
 		setupMocks         func(*mockS3.MockS3Contract, *mockS3.MockS3Manager)
 		expectedStatus     int
 		expectedInResponse string
@@ -277,6 +278,14 @@ func TestUpload(t *testing.T) {
 			setupMocks:     func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {},
 			expectedStatus: http.StatusBadRequest,
 		},
+		{
+			name:           "payload too large",
+			contentType:    "application/vnd.cyclonedx+json; version=1.6",
+			body:           validBOM,
+			maxBodySize:    5,
+			setupMocks:     func(s3c *mockS3.MockS3Contract, s3m *mockS3.MockS3Manager) {},
+			expectedStatus: http.StatusRequestEntityTooLarge,
+		},
 	}
 
 	for _, tt := range tests {
@@ -295,7 +304,7 @@ func TestUpload(t *testing.T) {
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
 			healthSvc := health.NewService(storageChecker)
 
-			cfg := Config{Port: 8080, Prefix: "/api"}
+			cfg := Config{Port: 8080, Prefix: "/api", MaxBodySize: tt.maxBodySize}
 			server := New(cfg, svc, healthSvc)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", strings.NewReader(tt.body))

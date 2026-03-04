@@ -189,6 +189,9 @@ podSecurityContext: {}
 service:
   type: ClusterIP
   port: 8080
+  # The maximum size of the request body allowed for uploads (in bytes).
+  # Default is 10MB.
+  maxBodySize: 10485760
 
 autoscaling:
   enabled: false

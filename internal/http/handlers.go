@@ -17,6 +17,11 @@ import (
 
 func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	if h.cfg.MaxBodySize > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, h.cfg.MaxBodySize)
+	}
+
 	// Assert content type and optional version
 	ok, version := CheckContentType(r.Header.Get(HeaderContentType))
 	if !ok {
@@ -38,7 +43,15 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.service.UploadBOM(ctx, r.Body, version)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
 		switch {
+		case errors.As(err, &maxBytesErr):
+			details.PayloadTooLarge(w,
+				"The uploaded BOM is too large.",
+				map[string]any{
+					"max-body-size": h.cfg.MaxBodySize,
+				})
+			return
 		case errors.Is(err, service.ErrAlreadyExists):
 			details.Conflict(w,
 				"Conflict with existing BOM",
