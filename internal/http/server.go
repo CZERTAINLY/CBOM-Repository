@@ -56,9 +56,8 @@ func (s *Server) Handler() *mux.Router {
 	r.Use(httpInfoContext)
 	r.Use(MaxBodySizeMiddleware(s.cfg.MaxBodySize))
 
-	uploadRouter := r.Methods(http.MethodPost).Subrouter()
-	uploadRouter.Use(s.BOMValidationMiddleware)
-	uploadRouter.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload)
+	uploadHandler := s.BOMValidationMiddleware(http.HandlerFunc(s.Upload))
+	r.Handle(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), uploadHandler).Methods(http.MethodPost)
 
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Search).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOMByURN), s.GetByURN).Methods(http.MethodGet)
