@@ -191,7 +191,7 @@ service:
   port: 8080
   # The maximum size of the request body allowed for uploads (in bytes).
   # Default is 10MB.
-  maxBodySize: 10485760
+  maxBodySize: 20971520
 
 autoscaling:
   enabled: false
