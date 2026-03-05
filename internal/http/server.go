@@ -28,7 +28,7 @@ const (
 type Config struct {
 	Port        int    `envconfig:"APP_HTTP_PORT" default:"8080"`
 	Prefix      string `envconfig:"APP_HTTP_PREFIX" default:"/api"`
-	MaxBodySize int64  `envconfig:"APP_HTTP_MAX_BODY_SIZE" default:"10485760"` // default to 10MB
+	MaxBodySize int64  `envconfig:"APP_HTTP_MAX_BODY_SIZE" default:"20971520"` // default to 20MB
 }
 
 type Server struct {
