@@ -155,8 +155,11 @@ func httpInfoContext(next http.Handler) http.Handler {
 func MaxBodySizeMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Wrap the request body with a MaxBytesReader
-			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			// Wrap the request body with a MaxBytesReader only when maxBytes is positive.
+			// Non-positive values are treated as "no limit" to avoid failing all reads.
+			if maxBytes > 0 {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
 
 			// Continue to the next handler
 			next.ServeHTTP(w, r)
