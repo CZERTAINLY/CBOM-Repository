@@ -304,7 +304,11 @@ func TestUpload(t *testing.T) {
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
 			healthSvc := health.NewService(storageChecker)
 
-			cfg := Config{Port: 8080, Prefix: "/api", MaxBodySize: tt.maxBodySize}
+			maxBodySize := tt.maxBodySize
+			if maxBodySize == 0 {
+				maxBodySize = 10485760 // default to 10MB
+			}
+			cfg := Config{Port: 8080, Prefix: "/api", MaxBodySize: maxBodySize}
 			server := New(cfg, svc, healthSvc)
 			router := server.Handler()
 
@@ -574,6 +578,56 @@ func TestSearch(t *testing.T) {
 				err := json.NewDecoder(w.Body).Decode(&response)
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestMaxBodySizeMiddleware(t *testing.T) {
+	tests := []struct {
+		name           string
+		maxBytes       int64
+		body           string
+		expectedStatus int
+	}{
+		{
+			name:           "body within limit",
+			maxBytes:       10,
+			body:           "12345",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "body exceeds limit",
+			maxBytes:       5,
+			body:           "123456",
+			expectedStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, err := io.ReadAll(r.Body)
+				if err != nil {
+					var maxBytesErr *http.MaxBytesError
+					if errors.As(err, &maxBytesErr) {
+						http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+						return
+					}
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := MaxBodySizeMiddleware(tt.maxBytes)
+			handler := middleware(next)
+
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }

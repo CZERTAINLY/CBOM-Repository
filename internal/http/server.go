@@ -54,9 +54,9 @@ func (s *Server) Handler() *mux.Router {
 	r := mux.NewRouter()
 
 	r.Use(httpInfoContext)
+	r.Use(MaxBodySizeMiddleware(s.cfg.MaxBodySize))
 
 	uploadRouter := r.Methods(http.MethodPost).Subrouter()
-	uploadRouter.Use(s.MaxBodySizeMiddleware)
 	uploadRouter.Use(s.BOMValidationMiddleware)
 	uploadRouter.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload)
 
@@ -151,13 +151,17 @@ func httpInfoContext(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) MaxBodySizeMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.MaxBodySize > 0 {
-			r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxBodySize)
-		}
-		next.ServeHTTP(w, r)
-	})
+// MaxBodySizeMiddleware limits the size of the request body to maxBytes.
+func MaxBodySizeMiddleware(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Wrap the request body with a MaxBytesReader
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+
+			// Continue to the next handler
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func (s *Server) BOMValidationMiddleware(next http.Handler) http.Handler {
