@@ -54,7 +54,7 @@ jobs:
           echo "value=$FIRST_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # v0.34.2
         with:
           image-ref: ${{ steps.tag.outputs.value }}
           format: json
@@ -62,13 +62,13 @@ jobs:
           exit-code: 0
 
       - name: Upload vulnerability report
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: trivy-report
           path: trivy-report.json
 
       - name: Fail build on vulnerabilities
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@97e0b3872f55f89b95b2f65b3dbab56962816478 # v0.34.2
         with:
           image-ref: ${{ steps.tag.outputs.value }}
           trivy-config: config/trivy.yaml
