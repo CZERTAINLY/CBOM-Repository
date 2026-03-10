@@ -23,7 +23,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 ########################
 # Run Stage
 ########################
-FROM alpine:3.23
+FROM alpine:3.23.3
+
+# apk upgrade should be removed once CVE-2026-22184 will be fixed
+RUN apk update && apk upgrade --no-cache
 
 LABEL org.opencontainers.image.authors="CZERTAINLY <support@czertainly.com>"
 
