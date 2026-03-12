@@ -12,7 +12,7 @@ import (
 func RequestTooLarge(w http.ResponseWriter, detail string, extensions map[string]any) {
 	p := pd.Problem{
 		Status:     http.StatusRequestEntityTooLarge,
-		Type:       "tag:example@example,2025:PayloadTooLarge",
+		Type:       "tag:example@example,2025:RequestEntityTooLarge",
 		Title:      http.StatusText(http.StatusRequestEntityTooLarge),
 		Detail:     detail,
 		Extensions: extensions,

@@ -40,7 +40,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.service.UploadBOM(ctx, r.Body, version)
 	switch {
 	case errors.As(err, &maxErr):
-		details.RequestTooLarge(w, "Http request's body size has exceeded the maximum limit.", map[string]any{})
+		details.RequestTooLarge(w, "HTTP request body exceeded the maximum allowed size.", map[string]any{})
 		return
 
 	case errors.Is(err, service.ErrAlreadyExists):
