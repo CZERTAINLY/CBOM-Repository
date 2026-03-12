@@ -22,6 +22,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	pd "github.com/kodeart/go-problem/v2"
 )
 
 func TestHealthHandlersStatusUp(t *testing.T) {
@@ -349,8 +351,19 @@ func TestMaxUploadSize(t *testing.T) {
 
 	router.ServeHTTP(w, req)
 
+	require.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
 	require.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 
+	var p pd.Problem
+	var b []byte
+	b, err = io.ReadAll(w.Result().Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(b, &p)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusRequestEntityTooLarge, p.Status)
+	require.Equal(t, "tag:example@example,2025:RequestEntityTooLarge", p.Type)
+	require.Equal(t, http.StatusText(http.StatusRequestEntityTooLarge), p.Title)
+	require.Equal(t, "HTTP request body exceeded the maximum allowed size.", p.Detail)
 }
 
 func TestGetByURN(t *testing.T) {
