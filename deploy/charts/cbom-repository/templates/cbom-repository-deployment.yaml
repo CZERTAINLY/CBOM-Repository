@@ -116,8 +116,6 @@ spec:
                   key: secret_key
             - name: APP_HTTP_PORT
               value: {{ .Values.service.port | quote }}
-            - name: APP_HTTP_MAX_BODY_SIZE
-              value: {{ .Values.service.maxBodySize | quote }}
             - name: APP_LOG_LEVEL
               value: {{ .Values.logging.level | quote }}
             {{- if $httpProxy }}

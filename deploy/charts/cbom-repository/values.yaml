@@ -189,8 +189,6 @@ podSecurityContext: {}
 service:
   type: ClusterIP
   port: 8080
-  # Maximum HTTP request body size (in bytes), default is 20 MiB.
-  maxBodySize: 20971520
 
 autoscaling:
   enabled: false
