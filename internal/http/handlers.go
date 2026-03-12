@@ -36,26 +36,32 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 
 	slog.InfoContext(ctx, "Start.")
 
+	var maxErr *http.MaxBytesError
 	resp, err := h.service.UploadBOM(ctx, r.Body, version)
-	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrAlreadyExists):
-			details.Conflict(w,
-				"Conflict with existing BOM",
-				map[string]any{
-					"conflict-details": map[string]any{
-						"serial-number": resp.SerialNumber,
-						"version":       resp.Version,
-					},
-				})
-			return
-		case errors.Is(err, service.ErrValidation):
-			details.BadRequest(w,
-				"Validation of BOM failed.",
-				map[string]any{"error": err.Error()},
-			)
-			return
-		}
+	switch {
+	case errors.As(err, &maxErr):
+		details.RequestTooLarge(w, "Http request's body size has exceeded the maximum limit.", map[string]any{})
+		return
+
+	case errors.Is(err, service.ErrAlreadyExists):
+		details.Conflict(w,
+			"Conflict with existing BOM",
+			map[string]any{
+				"conflict-details": map[string]any{
+					"serial-number": resp.SerialNumber,
+					"version":       resp.Version,
+				},
+			})
+		return
+
+	case errors.Is(err, service.ErrValidation):
+		details.BadRequest(w,
+			"Validation of BOM failed.",
+			map[string]any{"error": err.Error()},
+		)
+		return
+
+	case err != nil:
 		details.Internal(w,
 			"Upload of BOM failed.",
 			map[string]any{
@@ -63,6 +69,7 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 			})
 		return
 	}
+
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err = json.NewEncoder(w).Encode(resp); err != nil {

@@ -42,5 +42,9 @@ func New() (Config, error) {
 		return Config{}, errors.New("environment variable `APP_S3_SECRET_KEY` must not contain whitespace characters only")
 	}
 
+	if config.Http.MaxBodySize <= 0 {
+		return Config{}, errors.New("environment variable `APP_HTTP_MAX_BODY_SIZE` must be an integer greater than zero")
+	}
+
 	return config, nil
 }

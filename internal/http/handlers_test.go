@@ -314,6 +314,45 @@ func TestUpload(t *testing.T) {
 	}
 }
 
+func TestMaxUploadSize(t *testing.T) {
+	validBOM := `{
+		"bomFormat": "CycloneDX",
+		"specVersion": "1.6",
+		"serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+		"version": 1,
+		"metadata": {
+			"timestamp": "2023-01-01T00:00:00Z"
+		}
+	}`
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := service.New(st)
+	require.NoError(t, err)
+
+	storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+	healthSvc := health.NewService(storageChecker)
+
+	cfg := Config{Port: 8080, Prefix: "/api", MaxBodySize: 5}
+	server := New(cfg, svc, healthSvc)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/bom", strings.NewReader(validBOM))
+	req.Header.Set(HeaderContentType, "application/vnd.cyclonedx+json; version=1.6")
+	w := httptest.NewRecorder()
+
+	router := server.Handler()
+
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+
+}
+
 func TestGetByURN(t *testing.T) {
 	validURN := "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
 	invalidURN := "invalid-urn"
@@ -671,6 +710,56 @@ func TestIntegration_FullRouterWithPrefixes(t *testing.T) {
 			w = httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 			require.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}
+
+func TestMaxBodySizeMiddleware(t *testing.T) {
+	tests := []struct {
+		name           string
+		maxBytes       int64
+		body           string
+		expectedStatus int
+	}{
+		{
+			name:           "body within limit",
+			maxBytes:       10,
+			body:           "12345",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "body exceeds limit",
+			maxBytes:       5,
+			body:           "123456",
+			expectedStatus: http.StatusRequestEntityTooLarge,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, err := io.ReadAll(r.Body)
+				if err != nil {
+					var maxBytesErr *http.MaxBytesError
+					if errors.As(err, &maxBytesErr) {
+						http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+						return
+					}
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := maxBodySizeMiddleware(tt.maxBytes)
+			handler := middleware(next)
+
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }

@@ -28,6 +28,8 @@ const (
 type Config struct {
 	Port   int    `envconfig:"APP_HTTP_PORT" default:"8080"`
 	Prefix string `envconfig:"APP_HTTP_PREFIX" default:"/api"`
+	// default http request's body size is 20 MiB
+	MaxBodySize int64 `envconfig:"APP_HTTP_MAX_BODY_SIZE" default:"20971520"`
 }
 
 type Server struct {
@@ -52,6 +54,7 @@ func New(cfg Config, svc service.Service, healthSvc health.Service) Server {
 func (s *Server) Handler() *mux.Router {
 	r := mux.NewRouter()
 
+	r.Use(maxBodySizeMiddleware(s.cfg.MaxBodySize))
 	r.Use(httpInfoContext)
 
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload).Methods(http.MethodPost)
@@ -144,4 +147,17 @@ func httpInfoContext(next http.Handler) http.Handler {
 		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// maxBodySizeMiddleware limits the size of the request body to maxBytes.
+func maxBodySizeMiddleware(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Wrap the request body with a MaxBytesReader
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+
+			// Continue to the next handler
+			next.ServeHTTP(w, r)
+		})
+	}
 }
