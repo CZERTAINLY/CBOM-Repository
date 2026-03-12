@@ -9,6 +9,18 @@ import (
 // TODO: Need to read the RFC to better understand what _exactly_ instance field is for,
 //		 maybe we could use r.URL.Path
 
+func RequestTooLarge(w http.ResponseWriter, detail string, extensions map[string]any) {
+	p := pd.Problem{
+		Status:     http.StatusRequestEntityTooLarge,
+		Type:       "tag:example@example,2025:RequestEntityTooLarge",
+		Title:      http.StatusText(http.StatusRequestEntityTooLarge),
+		Detail:     detail,
+		Extensions: extensions,
+	}
+
+	p.JSON(w)
+}
+
 func Conflict(w http.ResponseWriter, detail string, extensions map[string]any) {
 	p := pd.Problem{
 		Status:     http.StatusConflict,
