@@ -182,8 +182,10 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 
 // GetBOMByUrn retrieves a BOM document by its URN and version.
 //
-// The function returns the BOM as a map to preserve the original JSON structure
-// and allow flexible handling of different CycloneDX schema versions.
+// The function returns the BOM as a byte slice to preserve the original JSON structure
+// and allow flexible handling of different CycloneDX schema versions as well as allowing
+// callers to decide, through service configuration, whether check the contents received
+// from backend storage or not.
 //
 // Version Selection:
 //   - If version is specified: Retrieves that specific version
@@ -195,7 +197,7 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 //   - version: The specific version to retrieve, or empty string for latest version
 //
 // Returns:
-//   - map[string]interface{}: The BOM document as a JSON-compatible map
+//   - []byte: The BOM document as a byte slice
 //   - error: Returns ErrNotFound if the URN or version doesn't exist,
 //     or other errors from the store or JSON unmarshaling
 func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) ([]byte, error) {
@@ -239,9 +241,10 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) ([]byte, 
 	if s.config.CheckOnFetch {
 		var bomMap map[string]interface{}
 		if err := json.Unmarshal(b, &bomMap); err != nil {
-			// TODO: write a better error message and return error
-			slog.ErrorContext(ctx, "`json.Unmarshal()` failed.", slog.String("error", err.Error()))
-			return nil, err
+			slog.ErrorContext(
+				ctx,
+				"`json.Unmarshal()` failed while checking the contents returned form the backend storage.", slog.String("error", err.Error()))
+			return nil, errors.New("BOM fetched from backend storage is malformed")
 		}
 	}
 

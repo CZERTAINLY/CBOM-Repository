@@ -113,8 +113,12 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json")
+	if _, err := w.Write(resp); err != nil {
+		slog.ErrorContext(ctx, "Writing to http.ResponseWriter failed.", slog.String("error", err.Error()))
+		details.Internal(w, "Writing to http.ResponseWriter failed.", map[string]any{})
+		return
+	}
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(resp)
 	slog.InfoContext(ctx, "Finished.")
 }
 
