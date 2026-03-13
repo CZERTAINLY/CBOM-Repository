@@ -36,7 +36,14 @@ var versionToEmbeddedFileMapping = map[string]string{
 	"1.6": "schemas/bom-1.6.schema.json",
 }
 
+type Config struct {
+	// CheckOnFetch controls whether service performs an unmarshal attempt on the array
+	// of bytes received from backend storage (minio/s3) for get operation.
+	CheckOnFetch bool `envconfig:"APP_CHECK_ON_FETCH" default:"false"`
+}
+
 type Service struct {
+	config      Config
 	store       store.Store
 	jsonSchemas map[string]*jss.Schema
 }
@@ -60,7 +67,7 @@ type Service struct {
 // Returns:
 //   - Service: An initialized service ready to handle BOM operations
 //   - error: Non-nil if any schema file cannot be read or compiled, nil otherwise
-func New(store store.Store) (Service, error) {
+func New(store store.Store, config Config) (Service, error) {
 
 	jsonSchemas := make(map[string]*jss.Schema)
 	for version, filename := range versionToEmbeddedFileMapping {
@@ -80,6 +87,7 @@ func New(store store.Store) (Service, error) {
 	return Service{
 		jsonSchemas: jsonSchemas,
 		store:       store,
+		config:      config,
 	}, nil
 }
 
@@ -97,7 +105,7 @@ func (s Service) VersionSupported(version string) bool {
 type SearchRes struct {
 	SerialNumber string      `json:"serialNumber"`
 	Version      string      `json:"version"`
-	Timestamp    string      `json:"timestamp"`
+	Timestamp    string      `json:"created_at"`
 	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
@@ -174,8 +182,10 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 
 // GetBOMByUrn retrieves a BOM document by its URN and version.
 //
-// The function returns the BOM as a map to preserve the original JSON structure
-// and allow flexible handling of different CycloneDX schema versions.
+// The function returns the BOM as a byte slice to preserve the original JSON structure
+// and allow flexible handling of different CycloneDX schema versions as well as allowing
+// callers to decide, through service configuration, whether check the contents received
+// from backend storage or not.
 //
 // Version Selection:
 //   - If version is specified: Retrieves that specific version
@@ -187,10 +197,10 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 //   - version: The specific version to retrieve, or empty string for latest version
 //
 // Returns:
-//   - map[string]interface{}: The BOM document as a JSON-compatible map
+//   - []byte: The BOM document as a byte slice
 //   - error: Returns ErrNotFound if the URN or version doesn't exist,
 //     or other errors from the store or JSON unmarshaling
-func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[string]interface{}, error) {
+func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) ([]byte, error) {
 	ctx = log.ContextAttrs(ctx,
 		slog.String("urn", urn),
 		slog.String("version", version),
@@ -228,18 +238,22 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 	}
 	slog.DebugContext(ctx, "`store.GetObject()` finished.", slog.Int64("size", int64(len(b))))
 
-	var bomMap map[string]interface{}
-	if err := json.Unmarshal(b, &bomMap); err != nil {
-		slog.ErrorContext(ctx, "`json.Unmarshal()` failed.", slog.String("error", err.Error()))
-		return nil, err
+	if s.config.CheckOnFetch {
+		var bomMap map[string]interface{}
+		if err := json.Unmarshal(b, &bomMap); err != nil {
+			slog.ErrorContext(
+				ctx,
+				"`json.Unmarshal()` failed while checking the contents returned form the backend storage.", slog.String("error", err.Error()))
+			return nil, errors.New("BOM fetched from backend storage is malformed")
+		}
 	}
 
-	return bomMap, nil
+	return b, nil
 }
 
 type VersionRes struct {
 	Version     string      `json:"version"`
-	Timestamp   string      `json:"timestamp"`
+	Timestamp   string      `json:"created_at"`
 	CryptoStats CryptoStats `json:"cryptoStats"`
 }
 

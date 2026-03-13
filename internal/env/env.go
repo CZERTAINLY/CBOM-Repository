@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/http"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/kelseyhightower/envconfig"
@@ -17,6 +18,7 @@ type Config struct {
 	Store    store.Config
 	Http     http.Config
 	LogLevel slog.Level `envconfig:"APP_LOG_LEVEL" default:"INFO"`
+	Service  service.Config
 }
 
 func New() (Config, error) {

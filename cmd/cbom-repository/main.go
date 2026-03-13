@@ -36,7 +36,7 @@ func main() {
 	slog.Debug("Connected to backend store.")
 
 	store := store.New(cfg.Store, s3Client, s3Manager)
-	svc, err := service.New(store)
+	svc, err := service.New(store, cfg.Service)
 	if err != nil {
 		slog.Error("Initializing service layer failed.", slog.String("error", err.Error()))
 		os.Exit(1)

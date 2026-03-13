@@ -263,7 +263,7 @@ func TestServer_URNVersions(t *testing.T) {
 			tt.setupMock(s3Mock)
 
 			st := store.New(store.Config{Bucket: "test-bucket"}, s3Mock, nil)
-			svc, err := service.New(st)
+			svc, err := service.New(st, service.Config{CheckOnFetch: false})
 			require.NoError(t, err)
 
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}

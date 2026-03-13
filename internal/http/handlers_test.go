@@ -291,7 +291,7 @@ func TestUpload(t *testing.T) {
 			tt.setupMocks(s3Mock, s3Manager)
 
 			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-			svc, err := service.New(st)
+			svc, err := service.New(st, service.Config{CheckOnFetch: true})
 			require.NoError(t, err)
 
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
@@ -334,7 +334,7 @@ func TestMaxUploadSize(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: true})
 	require.NoError(t, err)
 
 	storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
@@ -462,7 +462,7 @@ func TestGetByURN(t *testing.T) {
 			tt.setupMocks(s3Mock)
 
 			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-			svc, err := service.New(st)
+			svc, err := service.New(st, service.Config{CheckOnFetch: true})
 			require.NoError(t, err)
 
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
@@ -589,7 +589,7 @@ func TestSearch(t *testing.T) {
 			tt.setupMocks(s3Mock)
 
 			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-			svc, err := service.New(st)
+			svc, err := service.New(st, service.Config{CheckOnFetch: true})
 			require.NoError(t, err)
 
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
@@ -695,7 +695,7 @@ func TestIntegration_FullRouterWithPrefixes(t *testing.T) {
 
 			s3Mock := mockS3.NewMockS3Contract(ctrl)
 			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-			svc, err := service.New(st)
+			svc, err := service.New(st, service.Config{CheckOnFetch: true})
 			require.NoError(t, err)
 
 			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
