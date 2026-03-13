@@ -97,7 +97,7 @@ func (s Service) VersionSupported(version string) bool {
 type SearchRes struct {
 	SerialNumber string      `json:"serialNumber"`
 	Version      string      `json:"version"`
-	Timestamp    string      `json:"timestamp"`
+	Timestamp    string      `json:"created_at"`
 	CryptoStats  CryptoStats `json:"cryptoStats"`
 }
 
@@ -239,7 +239,7 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) (map[stri
 
 type VersionRes struct {
 	Version     string      `json:"version"`
-	Timestamp   string      `json:"timestamp"`
+	Timestamp   string      `json:"created_at"`
 	CryptoStats CryptoStats `json:"cryptoStats"`
 }
 
