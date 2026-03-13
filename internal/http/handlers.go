@@ -114,10 +114,7 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json")
 	w.WriteHeader(http.StatusOK)
-	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		slog.ErrorContext(ctx, "`json.NewEncoder()` failed", slog.String("error", err.Error()))
-		return
-	}
+	_, _ = w.Write(resp)
 	slog.InfoContext(ctx, "Finished.")
 }
 
