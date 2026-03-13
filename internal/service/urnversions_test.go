@@ -293,7 +293,7 @@ func TestService_UrnVersions(t *testing.T) {
 			tt.setupMock(s3Mock)
 
 			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-			svc, err := service.New(st)
+			svc, err := service.New(st, service.Config{CheckOnFetch: false})
 			require.NoError(t, err)
 
 			got, err := svc.UrnVersions(context.Background(), tt.urn)

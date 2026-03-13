@@ -26,6 +26,7 @@ func TestNewFunc(t *testing.T) {
 
 	svc, err := service.New(
 		store.New(store.Config{Bucket: "something"}, s3Mock, s3Manager),
+		service.Config{CheckOnFetch: false},
 	)
 	require.NoError(t, err)
 	require.True(t, svc.VersionSupported("1.6"))
@@ -70,7 +71,7 @@ func TestSearch_Success(t *testing.T) {
 	}, nil)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	res, err := svc.Search(context.Background(), now.Unix()-1)
@@ -91,7 +92,7 @@ func TestSearch_BadKey(t *testing.T) {
 	}, nil)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	_, err = svc.Search(context.Background(), now.Unix()-1)
@@ -107,7 +108,7 @@ func TestGetBOMByUrn_VersionsNotFound(t *testing.T) {
 	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{Contents: []types.Object{}}, nil)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	_, err = svc.GetBOMByUrn(context.Background(), "urn:uuid:123", "")
@@ -128,7 +129,7 @@ func TestGetBOMByUrn_GetObjectNotFound(t *testing.T) {
 	s3Mock.EXPECT().GetObject(gomock.Any(), gomock.Any(), gomock.Any()).Return((*s3.GetObjectOutput)(nil), &types.NoSuchKey{})
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	_, err = svc.GetBOMByUrn(context.Background(), "urn:uuid:123", "")
@@ -144,11 +145,27 @@ func TestGetBOMByUrn_UnmarshalError(t *testing.T) {
 	s3Mock.EXPECT().GetObject(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("not json"))}, nil)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: true})
 	require.NoError(t, err)
 
 	_, err = svc.GetBOMByUrn(context.Background(), "urn:uuid:123", "1")
 	require.Error(t, err)
+}
+
+func TestGetBOMByUrn_UnmarshalError_ButCheckOnFetchFalse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	// When version is provided, service should call GetObject directly; return invalid JSON
+	s3Mock.EXPECT().GetObject(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("not json"))}, nil)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+	svc, err := service.New(st, service.Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	_, err = svc.GetBOMByUrn(context.Background(), "urn:uuid:123", "1")
+	require.NoError(t, err)
 }
 
 func TestGetBOMByUrn_Success(t *testing.T) {
@@ -160,12 +177,29 @@ func TestGetBOMByUrn_Success(t *testing.T) {
 	s3Mock.EXPECT().GetObject(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("{\"bomFormat\":\"CycloneDX\"}"))}, nil)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
-	svc, err := service.New(st)
+	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	res, err := svc.GetBOMByUrn(context.Background(), "urn:uuid:123", "1")
 	require.NoError(t, err)
-	require.IsType(t, map[string]interface{}{}, res)
+	require.IsType(t, []byte{}, res)
+}
+
+func TestGetBOMByUrn_Success_CheckOnFetchTrue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	// GetObject returns valid JSON
+	s3Mock.EXPECT().GetObject(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("{\"bomFormat\":\"CycloneDX\"}"))}, nil)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+	svc, err := service.New(st, service.Config{CheckOnFetch: true})
+	require.NoError(t, err)
+
+	res, err := svc.GetBOMByUrn(context.Background(), "urn:uuid:123", "1")
+	require.NoError(t, err)
+	require.IsType(t, []byte{}, res)
 }
 
 // helper to create *string for aws types

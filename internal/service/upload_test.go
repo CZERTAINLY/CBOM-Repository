@@ -191,7 +191,7 @@ func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := New(st)
+	svc, err := New(st, Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	// HeadObject returns NotFound -> no key exists
@@ -214,7 +214,7 @@ func TestUploadBOM_Conflict_AlreadyExists(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := New(st)
+	svc, err := New(st, Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	serial := "urn:uuid:550e8400-e29b-11d4-a716-446655440000"
@@ -237,7 +237,7 @@ func TestUploadBOM_InvalidJSONAndSchemaMismatch(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := New(st)
+	svc, err := New(st, Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	// invalid JSON
@@ -259,7 +259,7 @@ func TestUploadBOM_VersionIncrementHasOriginal(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := New(st)
+	svc, err := New(st, Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	// ListObjectsV2 should return original and version 1 so new version becomes 2
@@ -292,7 +292,7 @@ func TestUploadBOM_SerialVersionSuccess(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := New(st)
+	svc, err := New(st, Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	// HeadObject returns NotFound -> key does not exist
@@ -317,7 +317,7 @@ func TestUploadBOM_HeadObjectErrorPropagated(t *testing.T) {
 	s3Manager := mockS3.NewMockS3Manager(ctrl)
 
 	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
-	svc, err := New(st)
+	svc, err := New(st, Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
 	// HeadObject returns some unexpected error

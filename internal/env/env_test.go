@@ -6,6 +6,7 @@ import (
 
 	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/http"
+	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
 
 	"github.com/stretchr/testify/require"
@@ -46,8 +47,10 @@ func TestNewFunc(t *testing.T) {
 					Prefix:      "/cbom/repo",
 					MaxBodySize: 512,
 				},
-				LogLevel:     slog.LevelDebug,
-				CheckOnFetch: true,
+				LogLevel: slog.LevelDebug,
+				Service: service.Config{
+					CheckOnFetch: true,
+				},
 			},
 		},
 		"log level, checkOnFetch, http port, prefix and max body size have default value": {
@@ -74,8 +77,10 @@ func TestNewFunc(t *testing.T) {
 					Prefix:      "/api",
 					MaxBodySize: 20971520,
 				},
-				LogLevel:     slog.LevelInfo,
-				CheckOnFetch: false,
+				LogLevel: slog.LevelInfo,
+				Service: service.Config{
+					CheckOnFetch: false,
+				},
 			},
 		},
 		"port must be a number": {
@@ -150,8 +155,10 @@ func TestNewFunc(t *testing.T) {
 					Prefix:      "/api",
 					MaxBodySize: 20971520,
 				},
-				LogLevel:     slog.LevelInfo,
-				CheckOnFetch: false,
+				LogLevel: slog.LevelInfo,
+				Service: service.Config{
+					CheckOnFetch: false,
+				},
 			},
 		},
 		"path style has a default value": {
@@ -177,8 +184,10 @@ func TestNewFunc(t *testing.T) {
 					Prefix:      "/api",
 					MaxBodySize: 20971520,
 				},
-				LogLevel:     slog.LevelInfo,
-				CheckOnFetch: false,
+				LogLevel: slog.LevelInfo,
+				Service: service.Config{
+					CheckOnFetch: false,
+				},
 			},
 		},
 		"endpoint may be omitted": {
@@ -203,8 +212,10 @@ func TestNewFunc(t *testing.T) {
 					Prefix:      "/api",
 					MaxBodySize: 20971520,
 				},
-				LogLevel:     slog.LevelInfo,
-				CheckOnFetch: false,
+				LogLevel: slog.LevelInfo,
+				Service: service.Config{
+					CheckOnFetch: false,
+				},
 			},
 		},
 		"whitespaces-only-bucket": {
