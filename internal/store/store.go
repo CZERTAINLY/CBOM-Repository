@@ -104,7 +104,7 @@ func (s Store) Search(ctx context.Context, ts int64) ([]string, error) {
 	for objectPaginator.HasMorePages() {
 		if output, err = objectPaginator.NextPage(ctx); err != nil {
 			slog.ErrorContext(ctx, "`s3.paginator.NextPage()` failed.", slog.String("error", err.Error()))
-			return nil, err
+			return nil, errors.New("obtaining next page failed")
 		}
 		for _, cpy := range output.Contents {
 			if unixTimestamp.Before(*cpy.LastModified) {
@@ -148,7 +148,7 @@ func (s Store) GetObjectVersions(ctx context.Context, urn string) ([]int, bool, 
 	for objectPaginator.HasMorePages() {
 		if output, err = objectPaginator.NextPage(ctx); err != nil {
 			slog.ErrorContext(ctx, "`s3.paginator.NextPage()` failed.", slog.String("error", err.Error()))
-			return nil, false, err
+			return nil, false, errors.New("obtaining next page failed")
 		}
 		objects = append(objects, output.Contents...)
 	}
@@ -220,7 +220,7 @@ func (s Store) GetHeadObject(ctx context.Context, key string) (HeadObject, error
 
 	case err != nil:
 		slog.ErrorContext(ctx, "`s3.HeadObject()` failed.", slog.String("error", err.Error()))
-		return HeadObject{}, err
+		return HeadObject{}, errors.New("`s3.HeadObject()` failed")
 
 	// Defensive check: handle an unexpected nil HeadObject result when no error is reported.
 	case head == nil:

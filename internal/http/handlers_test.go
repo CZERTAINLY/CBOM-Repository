@@ -361,7 +361,7 @@ func TestMaxUploadSize(t *testing.T) {
 	err = json.Unmarshal(b, &p)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusRequestEntityTooLarge, p.Status)
-	require.Equal(t, "tag:example@example,2025:RequestEntityTooLarge", p.Type)
+	require.Equal(t, "about:blank", p.Type)
 	require.Equal(t, http.StatusText(http.StatusRequestEntityTooLarge), p.Title)
 	require.Equal(t, "HTTP request body exceeded the maximum allowed size.", p.Detail)
 }

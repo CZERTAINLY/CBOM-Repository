@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/details"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
@@ -68,10 +67,7 @@ func (s *Server) Handler() *mux.Router {
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("Received an HTTP request for an unmapped path and method.",
 			slog.String("path", r.URL.Path), slog.String("method", r.Method))
-		details.NotFound(w,
-			fmt.Sprintf("There is no handler registered for path: %s, method: %s",
-				r.URL.Path, r.Method,
-			))
+		notfound(w, fmt.Sprintf("There is no handler registered for path: %s, method: %s", r.URL.Path, r.Method))
 	})
 
 	return r
