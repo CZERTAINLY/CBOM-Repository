@@ -130,7 +130,7 @@ func TestService_UrnVersions(t *testing.T) {
 					Return(nil, store.ErrNotFound)
 			},
 			want:    nil,
-			wantErr: service.ErrNotFound,
+			wantErr: errors.New("obtaining next page failed"),
 		},
 		{
 			name: "GetObjectVersions returns other error",
@@ -141,7 +141,7 @@ func TestService_UrnVersions(t *testing.T) {
 					Return(nil, errors.New("s3 error"))
 			},
 			want:    nil,
-			wantErr: errors.New("s3 error"),
+			wantErr: errors.New("obtaining next page failed"),
 		},
 		{
 			name: "HeadObject returns ErrNotFound - skip version",
@@ -159,7 +159,7 @@ func TestService_UrnVersions(t *testing.T) {
 				gomock.InOrder(
 					m.EXPECT().
 						HeadObject(gomock.Any(), gomock.Any()).
-						Return(nil, store.ErrNotFound),
+						Return(nil, &types.NoSuchKey{Message: ptr("no such key")}),
 					m.EXPECT().
 						HeadObject(gomock.Any(), gomock.Any()).
 						Return(&s3.HeadObjectOutput{
@@ -199,7 +199,7 @@ func TestService_UrnVersions(t *testing.T) {
 					Return(nil, errors.New("head object error"))
 			},
 			want:    nil,
-			wantErr: errors.New("head object error"),
+			wantErr: errors.New("`s3.HeadObject()` failed"),
 		},
 		{
 			name: "missing crypto stats metadata - skip version",
@@ -312,4 +312,8 @@ func TestService_UrnVersions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }

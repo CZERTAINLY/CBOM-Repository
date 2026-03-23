@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/details"
 	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
 
 	"github.com/gorilla/mux"
@@ -20,17 +19,14 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	// Assert content type and optional version
 	ok, version := CheckContentType(r.Header.Get(HeaderContentType))
 	if !ok {
-		details.UnsupportedMediaType(w,
-			fmt.Sprintf("Content type %s not allowed for %s method %s", r.Header.Get(HeaderContentType), r.URL.Path, r.Method),
-			[]string{"application/vnd.cyclonedx+json"})
+		unsupportedMediaType(w,
+			fmt.Sprintf("Content type value '%s' not allowed for path '%s' and method '%s'. Supported content types: %s",
+				r.Header.Get(HeaderContentType), r.URL.Path, r.Method, []string{"application/vnd.cyclonedx+json"}))
 		return
 	}
 
 	if !h.service.VersionSupported(version) {
-		details.BadRequest(w,
-			fmt.Sprintf("Version %s not supported", version),
-			map[string]any{"supported-versions": h.service.SupportedVersion()},
-		)
+		badrequest(w, fmt.Sprintf("Version '%s' not supported, supported versions: %s", version, h.service.SupportedVersion()))
 		return
 	}
 
@@ -40,33 +36,21 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.service.UploadBOM(ctx, r.Body, version)
 	switch {
 	case errors.As(err, &maxErr):
-		details.RequestTooLarge(w, "HTTP request body exceeded the maximum allowed size.", map[string]any{})
+		requestTooLarge(w, "HTTP request body exceeded the maximum allowed size.")
 		return
 
 	case errors.Is(err, service.ErrAlreadyExists):
-		details.Conflict(w,
-			"Conflict with existing BOM",
-			map[string]any{
-				"conflict-details": map[string]any{
-					"serial-number": resp.SerialNumber,
-					"version":       resp.Version,
-				},
-			})
+		conflict(w, fmt.Sprintf(
+			"Conflict with existing BOM, serial number '%s', version '%d'.",
+			resp.SerialNumber, resp.Version))
 		return
 
 	case errors.Is(err, service.ErrValidation):
-		details.BadRequest(w,
-			"Validation of BOM failed.",
-			map[string]any{"error": err.Error()},
-		)
+		badrequest(w, fmt.Sprintf("Validating BOM failed: %s", err))
 		return
 
 	case err != nil:
-		details.Internal(w,
-			"Upload of BOM failed.",
-			map[string]any{
-				"error": err.Error(),
-			})
+		internal(w, fmt.Sprintf("Uploading BOM failed: %s", err))
 		return
 	}
 
@@ -100,34 +84,25 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNotFound):
-			details.NotFound(w, "Requested BOM not found.")
+			notfound(w, "Requested BOM not found.")
 			return
 		}
 
-		details.Internal(w,
-			"Failed to get the requested BOM.",
-			map[string]any{
-				"error": err.Error(),
-			})
+		internal(w, fmt.Sprintf("Failed to get the requested BOM: %s.", err))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json")
 	if _, err := w.Write(resp); err != nil {
 		slog.ErrorContext(ctx, "Writing to http.ResponseWriter failed.", slog.String("error", err.Error()))
-		details.Internal(w, "Writing to http.ResponseWriter failed.", map[string]any{})
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 	slog.InfoContext(ctx, "Finished.")
 }
 
 func validateURNPathVariable(w http.ResponseWriter, urn string) bool {
 	if !service.URNValid(urn) {
-		details.BadRequest(w,
-			fmt.Sprintf("Path variable `{urn}` invalid: %q.", urn),
-			map[string]any{"example": "urn:uuid:<uuid>"},
-		)
+		badrequest(w, fmt.Sprintf("Path variable `{urn}` has invalid value: %q. Valid value MUST have the following structure: 'urn:uuid:<uuid>'.", urn))
 		return false
 	}
 	return true
@@ -147,15 +122,11 @@ func (s Server) URNVersions(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.service.UrnVersions(ctx, urn)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		details.NotFound(w, "No versions found for requested serial number.")
+		notfound(w, "No versions found for requested serial number.")
 		return
 
 	case err != nil:
-		details.Internal(w,
-			"Failed to get versions for requested serial number.",
-			map[string]any{
-				"error": err.Error(),
-			})
+		internal(w, fmt.Sprintf("Failed to get versions for requested serial number: %s", err))
 		return
 	}
 
@@ -173,37 +144,13 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 	after := r.URL.Query().Get("after")
 
 	if strings.TrimSpace(after) == "" {
-		details.BadRequest(w,
-			"Request validation failed.",
-			map[string]any{"errors": []struct {
-				Detail string `json:"detail"`
-				Param  string `json:"parameter"`
-			}{
-				{
-					Detail: "Query parameter must not be empty.",
-					Param:  "after",
-				},
-			},
-			},
-		)
+		badrequest(w, "Request validation failed, query parameter 'after' must not be empty.")
 		return
 	}
 
 	i, err := strconv.ParseInt(after, 10, 64)
 	if err != nil || i < 0 {
-		details.BadRequest(w,
-			"Request validation failed.",
-			map[string]any{"errors": []struct {
-				Detail string `json:"detail"`
-				Param  string `json:"parameter"`
-			}{
-				{
-					Detail: "Query parameter must be a positive integer (unixtime).",
-					Param:  "after",
-				},
-			},
-			},
-		)
+		badrequest(w, "Request validation failed, query parameter 'after' must be a positive integer (unixtime).")
 		return
 	}
 
@@ -211,11 +158,7 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.service.Search(ctx, i)
 	if err != nil {
-		details.Internal(w,
-			"Failed to get the requested BOM.",
-			map[string]any{
-				"error": err.Error(),
-			})
+		internal(w, fmt.Sprintf("Failed to get the requested BOM: %s.", err))
 		return
 	}
 

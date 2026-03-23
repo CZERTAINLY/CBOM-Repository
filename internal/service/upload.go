@@ -73,6 +73,7 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 	jsonSchema, ok := s.jsonSchemas[schemaVersion]
 	if !ok {
 		// this shouldn't happen, if http handler correctly checks against `VersionSupported()`
+		slog.ErrorContext(ctx, "Missing schema validator!!!", slog.String("version", schemaVersion))
 		return BOMCreated{}, fmt.Errorf("schema validator missing for version %s", schemaVersion)
 	}
 
