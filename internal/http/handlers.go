@@ -95,16 +95,14 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.cyclonedx+json")
 	if _, err := w.Write(resp); err != nil {
 		slog.ErrorContext(ctx, "Writing to http.ResponseWriter failed.", slog.String("error", err.Error()))
-		internal(w, "Writing to http.ResponseWriter failed.")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 	slog.InfoContext(ctx, "Finished.")
 }
 
 func validateURNPathVariable(w http.ResponseWriter, urn string) bool {
 	if !service.URNValid(urn) {
-		badrequest(w, fmt.Sprintf("Path variable `{urn}` has invalid vaule: %q. Valid value MUST have the following structure: 'urn:uuid:<uuid>'.", urn))
+		badrequest(w, fmt.Sprintf("Path variable `{urn}` has invalid value: %q. Valid value MUST have the following structure: 'urn:uuid:<uuid>'.", urn))
 		return false
 	}
 	return true
