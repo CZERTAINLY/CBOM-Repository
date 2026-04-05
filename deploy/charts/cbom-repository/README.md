@@ -97,7 +97,7 @@ The following values may be configured:
 | trusted.certificates                         | `""`                        | List of additional CA certificates that should be trusted             |
 | httpProxy                                    | `""`                        | Proxy to be used to access external resources through http            |
 | httpsProxy                                   | `""`                        | Proxy to be used to access external resources through https           |
-| httpProxy                                    | `""`                        | Defines list of external resources that should not use proxy settings |
+| noProxy                                      | `""`                        | Defines list of external resources that should not use proxy settings |
 | image.registry                               | `docker.io`                 | Docker registry name for the image                                    |
 | image.repository                             | `czertainly`                | Docker image repository name                                          |
 | image.name                                   | `cbom-repository`           | Docker image name                                                     |
